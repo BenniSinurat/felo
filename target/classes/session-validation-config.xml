@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd">
+
+	<flow name="loginMemberValidationFlow">
+		<message-filter onUnaccepted="invalidParameterFlow"
+			doc:name="Message">
+			<and-filter doc:name="And">
+				<expression-filter expression="#[originalPayload['msisdn'] != null]" />
+				<expression-filter expression="#[originalPayload['password'] != null]" />
+				<expression-filter expression="#[originalPayload['uid'] != null]" />
+			</and-filter>
+		</message-filter>
+		<set-variable value="/fromMember=#[originalPayload['msisdn']]"
+			variableName="requestAuthContent" />
+		<expression-transformer
+			expression="#[originalPayload['requestAuthContent']=requestAuthContent;originalPayload]"
+			doc:name="Expression" />
+		<flow-ref name="loginPartnerFlow" />
+		<logger level="INFO" message="LOGIN PARTNER = #[payload.status.message]" />
+		<choice>
+			<when expression="#[payload.status.message == 'PROCESSED']">
+				<!-- <flow-ref name="isMemberFlow" />
+				<choice>
+					<when expression="#[payload.status.message == 'MEMBER_ALREADY_REGISTER']"> -->
+						<flow-ref name="loginMemberBPFlow" doc:name="Flow Reference" />
+					<!-- </when>
+					<otherwise>
+						<logger level="INFO" message="[MEMBER NOT FOUND = #[payload.status.message]]" />
+					</otherwise>
+				</choice> -->
+			</when>
+			<otherwise>
+				<logger level="INFO"
+					message="[LOGIN PARTNER FAILED = #[payload.status.message]]" />
+			</otherwise>
+		</choice>
+
+	</flow>
+
+	<flow name="logoutMemberValidationFlow">
+		<message-filter onUnaccepted="invalidParameterFlow"
+			doc:name="Message">
+			<expression-filter expression="#[originalPayload['token'] != null]" />
+		</message-filter>
+
+		<flow-ref name="tokenValidationFlow" doc:name="Flow Reference" />
+		<choice doc:name="Choice">
+			<when expression="#[payload.status.message == 'SUCCESS']">
+				<logger level="INFO" message="[LOGOUT = #[payload]]"
+					doc:name="Logger" />
+				<flow-ref name="logoutMemberBPFlow" doc:name="Flow Reference" />
+			</when>
+			<otherwise>
+				<logger level="INFO" message="[LOGOUT FAILED = #[payload]]"
+					doc:name="Logger" />
+				<expression-component doc:name="Expression">
+					<![CDATA[
+						responseMap=new java.util.HashMap();
+						responseMap['status']=org.felo.api.data.StatusBuilder.getStatus(status);	
+					payload = responseMap;]]>
+				</expression-component>
+			</otherwise>
+		</choice>
+	</flow>
+</mule>

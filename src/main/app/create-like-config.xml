@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" version="CE-3.8.1"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd">
+
+	<flow name="registerLikeBPFlow">
+		<set-payload value="#[flowVars['originalPayload']]"
+			doc:name="Set Payload" />
+
+		<db:insert config-ref="MySQL_Configuration" doc:name="Database">
+			<db:parameterized-query>
+            	<![CDATA[INSERT INTO felo.likes (member_id,timeline_id) 
+					SELECT * FROM (SELECT (SELECT id FROM felo.members WHERE msisdn=#[originalPayload['msisdn']]) as memberID,#[originalPayload['timelineID']]) as tmp
+				    WHERE NOT EXISTS (
+				       	SELECT member_id from felo.likes 
+				       		WHERE member_id=(SELECT id FROM felo.members WHERE msisdn=#[originalPayload['msisdn']])
+				       		AND timeline_id=#[originalPayload['timelineID']]
+				    )]]>
+			</db:parameterized-query>
+		</db:insert>
+		<message-filter onUnaccepted="dbFailedFlow" doc:name="Message">
+			<expression-filter expression="#[payload == 1]" />
+		</message-filter>
+		<expression-component doc:name="Expression">
+			<![CDATA[responseMap=new java.util.HashMap();
+				responseMap['msisdn']=originalPayload['msisdn'];
+				responseMap['timelineID']=originalPayload['timelineID'];
+				responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('PROCESSED');			
+			payload = responseMap;]]>
+		</expression-component>
+		<logger level="INFO"
+			message="[ADD LIKE SUCCESS #[originalPayload['msisdn']] : #[payload]]"
+			doc:name="Logger" />
+
+		<flow-ref name="responseHandlerFlow" doc:name="Flow Reference" />
+	</flow>
+</mule>

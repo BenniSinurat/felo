@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:vm="http://www.mulesoft.org/schema/mule/vm"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" version="CE-3.8.1"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd 
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd">
+
+	<flow name="editMessageBPFlow">
+		<set-variable
+			value="${file.base.path}Community/#[originalPayload['communityID']]/ProfilePicture/profilePicture.#[originalPayload['profilePicture']['fileExtension']]"
+			variableName="profPic" doc:name="Variable" />
+		<set-variable
+			value="${file.base.path}Community/#[originalPayload['communityID']]/BackgroundPicture/backgroundPicture.#[originalPayload['backgroundPicture']['fileExtension']]"
+			variableName="backPic" doc:name="Variable" />
+		<db:update config-ref="MySQL_Configuration" doc:name="Database">
+			<db:parameterized-query>
+            	<![CDATA[UPDATE communities SET name=#[originalPayload.name],
+            									description=#[originalPayload.description],
+            									location=#[originalPayload.location],
+            									profile_picture=#[flowVars['profPic']],
+            									background_picture=#[flowVars['backPic']] 
+            			WHERE id=#[originalPayload['communityID']]]]>
+			</db:parameterized-query>
+		</db:update>
+		<logger level="INFO" message="FROM DB = #[payload]" />
+		<message-filter onUnaccepted="dbFailedFlow" doc:name="Message">
+			<expression-filter expression="#[payload == 1]" />
+		</message-filter>
+		<set-variable
+			value="Community/#[originalPayload['communityID']]/ProfilePicture"
+			variableName="path" doc:name="Variable" />
+		<expression-component doc:name="Expression">
+			<![CDATA[regMap=new java.util.HashMap();
+				regMap['path']=flowVars['path'];
+				regMap['content']=originalPayload.profilePicture['content'];
+				regMap['fileExtension']=originalPayload.profilePicture['fileExtension'];
+				regMap['fileName']='profilePicture';
+			payload = regMap;]]>
+		</expression-component>
+		<vm:outbound-endpoint exchange-pattern="one-way"
+			connector-ref="File_VM" path="save.file" doc:name="VM" />
+		<set-variable
+			value="Community/#[originalPayload['communityID']]/BackgroundPicture"
+			variableName="path" doc:name="Variable" />
+		<expression-component doc:name="Expression">
+			<![CDATA[regMap=new java.util.HashMap();
+				regMap['path']=flowVars['path'];
+				regMap['content']=originalPayload.backgroundPicture['content'];
+				regMap['fileExtension']=originalPayload.backgroundPicture['fileExtension'];
+				regMap['fileName']='backgroundPicture';
+			payload = regMap;]]>
+		</expression-component>
+		<vm:outbound-endpoint exchange-pattern="one-way"
+			connector-ref="File_VM" path="save.file" doc:name="VM" />
+		<expression-component doc:name="Expression">
+			<![CDATA[responseMap=new java.util.HashMap();
+				responseMap['msisdn']=originalPayload['msisdn'];
+				responseMap['communityID']=originalPayload['communityID'];
+				responseMap['location']=originalPayload['location'];
+				responseMap['description']=originalPayload['description'];
+				responseMap['name']=originalPayload['name'];
+				responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('PROCESSED');		
+			payload = responseMap;]]>
+		</expression-component>
+		<logger level="INFO"
+			message="[EDIT COMMUNITY SUCCESS #[originalPayload['msisdn']] : #[payload]]"
+			doc:name="Logger" />
+		<flow-ref name="responseHandlerFlow" doc:name="Flow Reference" />
+	</flow>
+</mule>

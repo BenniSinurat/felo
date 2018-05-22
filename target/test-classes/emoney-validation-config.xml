@@ -1,0 +1,208 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" version="CE-3.8.1"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd">
+
+	<flow name="emoneyBalanceInqValidationFlow">
+		<message-filter onUnaccepted="invalidParameterFlow"
+			doc:name="Message">
+			<expression-filter expression="#[originalPayload['token'] != null]" />
+		</message-filter>
+		<flow-ref name="tokenValidationFlow" doc:name="Flow Reference" />
+		<choice doc:name="Choice">
+			<when expression="#[payload.status.message == 'SUCCESS']">
+				<flow-ref name="emoneyBalanceInqBP" doc:name="Flow Reference" />
+			</when>
+			<otherwise>
+				<logger level="INFO" message="[MEMBER NOT FOUND = #[payload]]"
+					doc:name="Logger" />
+			</otherwise>
+		</choice>
+	</flow>
+	<flow name="emoneyTrxHistoryValidationFlow">
+		<message-filter onUnaccepted="invalidParameterFlow"
+			doc:name="Message">
+			<expression-filter expression="#[originalPayload['token'] != null]" />
+		</message-filter>
+		<flow-ref name="tokenValidationFlow" doc:name="Flow Reference" />
+		<choice doc:name="Choice">
+			<when expression="#[payload.status.message == 'SUCCESS']">
+				<flow-ref name="emoneyTrxHistoryBP" doc:name="Flow Reference" />
+			</when>
+			<otherwise>
+				<logger level="INFO" message="[MEMBER NOT FOUND = #[payload]]"
+					doc:name="Logger" />
+			</otherwise>
+		</choice>
+	</flow>
+	<flow name="emoneyResetCredentialValidationFlow">
+		<message-filter onUnaccepted="invalidParameterFlow"
+			doc:name="Message">
+			<and-filter>
+				<expression-filter expression="#[originalPayload['token'] != null]" />
+				<expression-filter expression="#[originalPayload['email'] != null]" />
+			</and-filter>
+		</message-filter>
+		<flow-ref name="tokenValidationFlow" doc:name="Flow Reference" />
+		<choice doc:name="Choice">
+			<when expression="#[payload.status.message == 'SUCCESS']">
+				<flow-ref name="emoneyResetCredentialBP" doc:name="Flow Reference" />
+			</when>
+			<otherwise>
+				<logger level="INFO" message="[MEMBER NOT FOUND = #[payload]]"
+					doc:name="Logger" />
+			</otherwise>
+		</choice>
+	</flow>
+	<flow name="emoneyRequestMemberPaymentValidation">
+		<message-filter onUnaccepted="invalidParameterFlow"
+			doc:name="Message">
+			<and-filter>
+				<expression-filter expression="#[originalPayload['token'] != null]" />
+				<expression-filter expression="#[originalPayload['amount'] != null]" />
+				<expression-filter expression="#[originalPayload['toMember'] != null]" />
+				<expression-filter expression="#[originalPayload['traceNumber'] != null]" />
+			</and-filter>
+		</message-filter>
+		<flow-ref name="tokenValidationFlow" doc:name="Flow Reference" />
+		<choice doc:name="Choice">
+			<when expression="#[payload.status.message == 'SUCCESS']">
+				<flow-ref name="emoneyRequestMemberPaymentBP" doc:name="Flow Reference" />
+			</when>
+			<otherwise>
+				<logger level="INFO" message="[MEMBER NOT FOUND = #[payload]]"
+					doc:name="Logger" />
+			</otherwise>
+		</choice>
+	</flow>
+	
+	<flow name="emoneyConfirmMemberPaymentValidation">
+		<message-filter onUnaccepted="invalidParameterFlow"
+			doc:name="Message">
+			<and-filter>
+				<expression-filter expression="#[originalPayload['token'] != null]" />
+				<expression-filter expression="#[originalPayload['requestID'] != null]" />
+			</and-filter>
+		</message-filter>
+		<flow-ref name="tokenValidationFlow" doc:name="Flow Reference" />
+		<choice doc:name="Choice">
+			<when expression="#[payload.status.message == 'SUCCESS']">
+				<flow-ref name="emoneyConfirmMemberPaymentBP" doc:name="Flow Reference" />
+			</when>
+			<otherwise>
+				<logger level="INFO" message="[MEMBER NOT FOUND = #[payload]]"
+					doc:name="Logger" />
+			</otherwise>
+		</choice>
+	</flow>
+	
+	<flow name="emoneyRequestPartnerPaymentValidation">
+		<message-filter onUnaccepted="invalidParameterFlow"
+			doc:name="Message">
+			<and-filter>
+				<expression-filter expression="#[originalPayload['token'] != null]" />
+				<expression-filter expression="#[originalPayload['amount'] != null]" />
+				<expression-filter expression="#[originalPayload['fromMember'] != null]" />
+				<expression-filter expression="#[originalPayload['toPartner'] != null]" />
+				<expression-filter expression="#[originalPayload['traceNumber'] != null]" />
+			</and-filter>
+		</message-filter>
+		<flow-ref name="tokenValidationFlow" doc:name="Flow Reference" />
+		<choice doc:name="Choice">
+			<when expression="#[payload.status.message == 'SUCCESS']">
+				<flow-ref name="emoneyRequestPartnerPaymentBP" doc:name="Flow Reference" />
+			</when>
+			<otherwise>
+				<logger level="INFO" message="[MEMBER NOT FOUND = #[payload]]"
+					doc:name="Logger" />
+			</otherwise>
+		</choice>
+	</flow>
+	
+	<flow name="emoneyConfirmPartnerPaymentValidation">
+		<message-filter onUnaccepted="invalidParameterFlow"
+			doc:name="Message">
+			<and-filter>
+				<expression-filter expression="#[originalPayload['token'] != null]" />
+				<expression-filter expression="#[originalPayload['requestID'] != null]" />
+			</and-filter>
+		</message-filter>
+		<flow-ref name="tokenValidationFlow" doc:name="Flow Reference" />
+		<choice doc:name="Choice">
+			<when expression="#[payload.status.message == 'SUCCESS']">
+				<flow-ref name="emoneyConfirmPartnerPaymentBP" doc:name="Flow Reference" />
+			</when>
+			<otherwise>
+				<logger level="INFO" message="[MEMBER NOT FOUND = #[payload]]"
+					doc:name="Logger" />
+			</otherwise>
+		</choice>
+	</flow>
+	
+	<flow name="accountListValidation">
+		<message-filter onUnaccepted="invalidParameterFlow"
+			doc:name="Message">
+			<expression-filter expression="#[originalPayload['token'] != null]" />
+		</message-filter>
+		<flow-ref name="tokenValidationFlow" doc:name="Flow Reference" />
+		<choice doc:name="Choice">
+			<when expression="#[payload.status.message == 'SUCCESS']">
+				<flow-ref name="accountListBP" doc:name="Flow Reference" />
+			</when>
+			<otherwise>
+				<logger level="INFO" message="[MEMBER NOT FOUND = #[payload]]"
+					doc:name="Logger" />
+			</otherwise>
+		</choice>
+	</flow>
+	
+	<flow name="creditValidation">
+		<message-filter onUnaccepted="invalidParameterFlow"
+			doc:name="Message">
+			<and-filter>
+				<expression-filter expression="#[originalPayload['token'] != null]" />
+				<expression-filter expression="#[originalPayload['account'] != null]"/>
+				<expression-filter expression="#[originalPayload['toMember'] != null]"/>
+				<expression-filter expression="#[originalPayload['traceNumber'] != null]"/>
+				<expression-filter expression="#[originalPayload['credential'] != null]"/>
+				<expression-filter expression="#[originalPayload['amount'] != null]" />
+			</and-filter>
+		</message-filter>
+		<flow-ref name="tokenValidationFlow" doc:name="Flow Reference" />
+		<choice doc:name="Choice">
+			<when expression="#[payload.status.message == 'SUCCESS']">
+				<flow-ref name="creditBPFlow" doc:name="Flow Reference" />
+			</when>
+			<otherwise>
+				<logger level="INFO" message="[MEMBER NOT FOUND = #[payload]]"
+					doc:name="Logger" />
+			</otherwise>
+		</choice>
+	</flow>
+	
+	<flow name="chargeValidation">
+		<message-filter onUnaccepted="invalidParameterFlow"
+			doc:name="Message">
+			<and-filter>
+				<expression-filter expression="#[originalPayload['token'] != null]" />
+				<expression-filter expression="#[originalPayload['account'] != null]"/>
+				<expression-filter expression="#[originalPayload['traceNumber'] != null]"/>
+				<expression-filter expression="#[originalPayload['credential'] != null]"/>
+				<expression-filter expression="#[originalPayload['amount'] != null]" />
+			</and-filter>
+		</message-filter>
+		<flow-ref name="tokenValidationFlow" doc:name="Flow Reference" />
+		<choice doc:name="Choice">
+			<when expression="#[payload.status.message == 'SUCCESS']">
+				<flow-ref name="chargeBPFlow" doc:name="Flow Reference" />
+			</when>
+			<otherwise>
+				<logger level="INFO" message="[MEMBER NOT FOUND = #[payload]]"
+					doc:name="Logger" />
+			</otherwise>
+		</choice>
+	</flow>
+</mule>

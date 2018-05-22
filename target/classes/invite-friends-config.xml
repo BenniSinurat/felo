@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" version="CE-3.8.1"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd">
+
+	<flow name="inviteFriendsBPFlow">
+		<set-payload value="#[flowVars['originalPayload']]"
+			doc:name="Set Payload" />
+		<db:select config-ref="MySQL_Configuration" doc:name="Database">
+			<db:parameterized-query>
+				<![CDATA[SELECT mc.admin FROM members m
+							INNER JOIN member_community mc ON m.id=mc.member_id
+						WHERE m.msisdn=#[originalPayload['msisdn']]]]>
+			</db:parameterized-query>
+		</db:select>
+		<logger level="INFO" message="PAYLOAD FROM DB = #[payload.get(0)['admin']]"/>
+		<choice>
+			<when expression="#[payload.get(0)['admin'] == 'true']">
+				<db:insert config-ref="MySQL_Configuration" doc:name="Database">
+					<db:parameterized-query>
+						<![CDATA[INSERT INTO felo.member_community (member_id, community_id, approved, invited_by, admin)
+							VALUES((SELECT id FROM members WHERE msisdn=#[originalPayload['toMember']]),#[originalPayload['communityID']],b'1',
+							(SELECT m.id FROM members m INNER JOIN felo.member_community mc ON m.id=mc.member_id 
+								WHERE m.msisdn=#[originalPayload['msisdn']] AND mc.admin='0'),b'1')]]>
+					</db:parameterized-query>
+				</db:insert>
+				<message-filter onUnaccepted="dbFailedFlow" doc:name="Message">
+					<expression-filter expression="#[payload == 1]" />
+				</message-filter>
+				<expression-component doc:name="Expression">
+					<![CDATA[responseMap=new java.util.HashMap();
+						responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('PROCESSED');			
+					payload = responseMap;]]>
+				</expression-component>
+				<logger level="INFO"
+					message="[INVITED FRIENDS TO COMMUNITY SUCCESS #[originalPayload['msisdn']] : #[payload]]"
+					doc:name="Logger" />
+			</when>
+			<otherwise>
+				<expression-component doc:name="Expression">
+					<![CDATA[responseMap=new java.util.HashMap();
+						responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('NOT_FOUND');			
+					payload = responseMap;]]>
+				</expression-component>
+			</otherwise>
+		</choice>
+
+		<flow-ref name="responseHandlerFlow" doc:name="Flow Reference" />
+	</flow>
+
+	<flow name="listInviteFriendsBPFlow">
+		<set-payload value="#[flowVars['originalPayload']]"
+			doc:name="Set Payload" />
+		<db:select config-ref="MySQL_Configuration" doc:name="Database">
+			<db:parameterized-query>
+            	<![CDATA[SELECT c.id as communityID, c.name as communityName, (SELECT m.name FROM felo.members m
+							INNER JOIN felo.member_community mc ON mc.invited_by=m.id 
+						WHERE mc.community_id=#[originalPayload['communityID']]
+					    GROUP BY m.id) as invitedBy,
+					    (SELECT COUNT(*) FROM felo.member_community mc
+							WHERE mc.community_id=#[originalPayload['communityID']] AND invited_by IS NOT NULL 
+					        AND mc.member_id=(SELECT id FROM felo.members WHERE msisdn=#[originalPayload['msisdn']])) as totalInvited
+					    FROM felo.member_community mc 
+					          INNER JOIN felo.members m ON mc.member_id = m.id 
+					          INNER JOIN felo.communities c ON mc.community_id = c.id
+					      WHERE m.msisdn=#[originalPayload['msisdn']] AND mc.community_id=#[originalPayload['communityID']]
+					      AND mc.invited_by IS NOT NULL]]>
+			</db:parameterized-query>
+		</db:select>
+		<logger level="INFO" message="PAYLOAD DB = #[payload]" />
+		<message-filter onUnaccepted="dataNotFoundFlow"
+			doc:name="Message">
+			<expression-filter expression="#[payload != []]" />
+		</message-filter>
+		<set-variable variableName="totalInvited"
+			value="#[payload.get(0)['totalInvited']]" doc:name="Variable" />
+		<set-variable variableName="trxMaps" value="#[new java.util.ArrayList()]"
+			doc:name="Variable" />
+
+		<foreach collection="#[payload]" doc:name="For Each">
+			<set-variable variableName="trxPayload" value="#[new java.util.HashMap()]"
+				doc:name="Variable" />
+			<set-variable variableName="communityID" value="#[payload.'communityID']"
+				doc:name="Variable" />
+			<set-variable variableName="communityName" value="#[payload.'communityName']"
+				doc:name="Variable" />
+			<set-variable variableName="invitedBy" value="#[payload.'invitedBy']"
+				doc:name="Variable" />
+
+			<expression-transformer
+				expression="#[trxPayload['communityID']=flowVars.communityID;trxPayload]"
+				doc:name="Expression" />
+
+			<expression-transformer
+				expression="#[trxPayload['communityName']=flowVars.communityName;trxPayload]"
+				doc:name="Expression" />
+
+			<expression-transformer
+				expression="#[trxPayload['invitedBy']=flowVars.invitedBy;trxPayload]"
+				doc:name="Expression" />
+
+			<expression-component doc:name="Expression">
+				<![CDATA[trxMaps.add(trxPayload);]]>
+			</expression-component>
+		</foreach>
+		<expression-component doc:name="Expression">
+			<![CDATA[responseMap=new java.util.HashMap();
+				responseMap['msisdn']=originalPayload['msisdn'];
+				responseMap['totalInvited']=flowVars['totalInvited'];
+				responseMap['listInvited']=flowVars['trxMaps'];
+				responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('PROCESSED');			
+			payload = responseMap;]]>
+		</expression-component>
+		<logger level="INFO"
+			message="[INVITED FRIENDS TO COMMUNITY SUCCESS #[originalPayload['msisdn']] : #[payload]]"
+			doc:name="Logger" />
+		<flow-ref name="responseHandlerFlow" doc:name="Flow Reference" />
+	</flow>
+</mule>

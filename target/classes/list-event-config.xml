@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:json="http://www.mulesoft.org/schema/mule/json"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" version="CE-3.8.1"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd 
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd">
+
+	<flow name="eventListBPFlow">
+		<set-payload value="#[flowVars['originalPayload']]"
+			doc:name="Set Payload" />
+		<db:select config-ref="MySQL_Configuration" doc:name="Database">
+			<db:parameterized-query>
+            	<![CDATA[SELECT e.id, m.msisdn, c.id as communityID, c.name as communityName, e.name as event, ed.event_picture FROM events e 
+            		INNER JOIN event_details ed ON e.id=ed.event_id 
+            		INNER JOIN communities c ON e.community_id=c.id 
+            		INNER JOIN members m ON e.member_id=m.id 
+            		AND c.id=#[originalPayload['communityID']]]]>
+			</db:parameterized-query>
+		</db:select>
+		<logger level="INFO" message="PAYLOAD DB = #[payload]"
+			doc:name="Logger" />
+		<message-filter onUnaccepted="dataNotFoundFlow"
+			doc:name="Message">
+			<expression-filter expression="#[payload != []]" />
+		</message-filter>
+		<set-variable variableName="trxMaps" value="#[new java.util.ArrayList()]"
+			doc:name="Variable" />
+
+		<foreach collection="#[payload]" doc:name="For Each">
+			<set-variable variableName="trxPayload" value="#[new java.util.HashMap()]"
+				doc:name="Variable" />
+			<set-variable variableName="id" value="#[payload.'id']"
+				doc:name="Variable" />
+			<set-variable variableName="communityID" value="#[payload.'communityID']"
+				doc:name="Variable" />
+			<set-variable variableName="communityName" value="#[payload.'communityName']"
+				doc:name="Variable" />
+			<set-variable variableName="event" value="#[payload.'event']"
+				doc:name="Variable" />
+			<set-variable variableName="eventPic" value="#[payload.'event_picture']"
+				doc:name="Variable" />
+
+			<expression-transformer expression="#[trxPayload['id']=flowVars.id;trxPayload]"
+				doc:name="Expression" />
+
+			<expression-transformer
+				expression="#[trxPayload['communityID']=flowVars.communityID;trxPayload]"
+				doc:name="Expression" />
+
+			<expression-transformer
+				expression="#[trxPayload['communityName']=flowVars.communityName;trxPayload]"
+				doc:name="Expression" />
+
+			<expression-transformer
+				expression="#[trxPayload['event']=flowVars.event;trxPayload]"
+				doc:name="Expression" />
+
+			<expression-transformer
+				expression="#[trxPayload['eventPicture']=flowVars.eventPic;trxPayload]"
+				doc:name="Expression" />
+
+			<expression-component doc:name="Expression">
+				<![CDATA[trxMaps.add(trxPayload);]]>
+			</expression-component>
+
+		</foreach>
+		<expression-component doc:name="Expression">
+			<![CDATA[
+				responseMap=new java.util.HashMap();
+				responseMap['msisdn']=originalPayload['msisdn'];
+				responseMap['events']=flowVars['trxMaps'];
+				responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('PROCESSED');			
+			payload = responseMap;]]>
+		</expression-component>
+	</flow>
+</mule>

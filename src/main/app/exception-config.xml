@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:vm="http://www.mulesoft.org/schema/mule/vm" xmlns:ws="http://www.mulesoft.org/schema/mule/ws"
+	xmlns:json="http://www.mulesoft.org/schema/mule/json" xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns:jms="http://www.mulesoft.org/schema/mule/jms" xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/jms http://www.mulesoft.org/schema/mule/jms/current/mule-jms.xsd
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd
+http://www.mulesoft.org/schema/mule/ws http://www.mulesoft.org/schema/mule/ws/current/mule-ws.xsd">
+
+	<choice-exception-strategy name="sessionException">
+		<catch-exception-strategy
+			when="#[exception.causedBy(com.auth0.jwt.exceptions.InvalidClaimException)]"
+			doc:name="Catch Exception Strategy">
+			<set-payload value="#[originalPayload]" />
+			<expression-component doc:name="Expression">
+				<![CDATA[
+				responseMap = new java.util.HashMap();
+				responseMap['status'] = org.felo.api.data.StatusBuilder.getStatus('SESSION_EXPIRED');
+				payload = responseMap;]]>
+			</expression-component>
+			<json:object-to-json-transformer
+				doc:name="Object to JSON" mapper-ref="NonNullMapper" />
+			<set-property propertyName="http.status"
+				value="#[org.felo.api.data.StatusBuilder.getHttpStatus('SESSION_EXPIRED')]" />
+		</catch-exception-strategy>
+		<catch-exception-strategy
+			when="#[exception.causedBy(com.auth0.jwt.exceptions.SignatureVerificationException)]"
+			doc:name="Catch Exception Strategy">
+			<set-payload value="#[originalPayload]" />
+			<expression-component doc:name="Expression">
+				<![CDATA[
+				responseMap = new java.util.HashMap();
+				responseMap['status'] = org.felo.api.data.StatusBuilder.getStatus('INVALID_SIGNATURE');
+				payload = responseMap;]]>
+			</expression-component>
+			<json:object-to-json-transformer
+				doc:name="Object to JSON" mapper-ref="NonNullMapper" />
+			<set-property propertyName="http.status"
+				value="#[org.felo.api.data.StatusBuilder.getHttpStatus('INVALID_SIGNATURE')]" />
+		</catch-exception-strategy>
+		<catch-exception-strategy
+			when="#[exception.causedBy(com.auth0.jwt.exceptions.JWTDecodeException)]"
+			doc:name="Catch Exception Strategy">
+			<set-payload value="#[originalPayload]" />
+			<expression-component doc:name="Expression">
+				<![CDATA[
+				responseMap = new java.util.HashMap();
+				responseMap['status'] = org.felo.api.data.StatusBuilder.getStatus('INVALID_SIGNATURE');
+				payload = responseMap;]]>
+			</expression-component>
+			<json:object-to-json-transformer
+				doc:name="Object to JSON" mapper-ref="NonNullMapper" />
+			<set-property propertyName="http.status"
+				value="#[org.felo.api.data.StatusBuilder.getHttpStatus('INVALID_SIGNATURE')]" />
+		</catch-exception-strategy>
+		<catch-exception-strategy
+			when="#[exception.causedBy(java.net.ConnectException)]" doc:name="Catch Exception Strategy">
+			<set-payload value="#[originalPayload]" />
+			<expression-component doc:name="Expression">
+				<![CDATA[
+				responseMap = new java.util.HashMap();
+				responseMap['status'] = org.felo.api.data.StatusBuilder.getStatus('HOST_CONNECTION_TIMEOUT');
+				payload = responseMap;]]>
+			</expression-component>
+			<json:object-to-json-transformer
+				doc:name="Object to JSON" mapper-ref="NonNullMapper" />
+			<set-property propertyName="http.status"
+				value="#[org.felo.api.data.StatusBuilder.getHttpStatus('HOST_CONNECTION_TIMEOUT')]" />
+		</catch-exception-strategy>
+		<catch-exception-strategy
+			when="#[exception.causedBy(java.net.SocketException)]" doc:name="Catch Exception Strategy">
+			<set-payload value="#[originalPayload]" />
+			<expression-component doc:name="Expression">
+				<![CDATA[
+				responseMap = new java.util.HashMap();
+				responseMap['status'] = org.felo.api.data.StatusBuilder.getStatus('HOST_CONNECTION_FAILED');
+				payload = responseMap;]]>
+			</expression-component>
+			<json:object-to-json-transformer
+				doc:name="Object to JSON" mapper-ref="NonNullMapper" />
+			<set-property propertyName="http.status"
+				value="#[org.felo.api.data.StatusBuilder.getHttpStatus('HOST_CONNECTION_FAILED')]" />
+		</catch-exception-strategy>
+		<catch-exception-strategy
+			when="#[exception.causedBy(org.mule.module.http.internal.request.ResponseValidatorException)]"
+			doc:name="Catch Exception Strategy">
+			<set-payload value="#[originalPayload]" />
+			<expression-component doc:name="Expression">
+				<![CDATA[
+				responseMap = new java.util.HashMap();
+				responseMap['status'] = org.felo.api.data.StatusBuilder.getStatus('UNDEFINED_ERROR');
+				payload = responseMap;]]>
+			</expression-component>
+			<json:object-to-json-transformer
+				doc:name="Object to JSON" mapper-ref="NonNullMapper" />
+			<set-property propertyName="http.status"
+				value="#[org.felo.api.data.StatusBuilder.getHttpStatus('UNDEFINED_ERROR')]" />
+		</catch-exception-strategy>
+	</choice-exception-strategy>
+
+</mule>

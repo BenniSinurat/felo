@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:mulerequester="http://www.mulesoft.org/schema/mule/mulerequester"
+	xmlns:jms="http://www.mulesoft.org/schema/mule/jms" xmlns:vm="http://www.mulesoft.org/schema/mule/vm"
+	xmlns:file="http://www.mulesoft.org/schema/mule/file" xmlns:tls="http://www.mulesoft.org/schema/mule/tls"
+	xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/mulerequester http://www.mulesoft.org/schema/mule/mulerequester/current/mule-mulerequester.xsd 
+http://www.mulesoft.org/schema/mule/jms http://www.mulesoft.org/schema/mule/jms/current/mule-jms.xsd 
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd 
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd 
+http://www.mulesoft.org/schema/mule/tls http://www.mulesoft.org/schema/mule/tls/current/mule-tls.xsd http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd  
+http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-3.0.xsd">
+
+	<context:property-placeholder location="classpath:${mule.env}.properties" />
+
+	<spring:beans>
+		<spring:import resource="classpath:app-context.xml" />
+		<spring:import resource="classpath:hazelcast-context.xml" />
+		<spring:bean id="objectStore"
+			class="org.mule.util.store.SimpleMemoryObjectStore" />
+	</spring:beans>
+
+	<jms:activemq-connector name="Active_MQ"
+		specification="1.1" brokerURL="failover:tcp://localhost:61616"
+		disableTemporaryReplyToDestinations="true" validateConnections="true"
+		doc:name="Active MQ" />
+
+	<http:listener-config name="HTTP_Listener_Configuration"
+		host="0.0.0.0" port="${global.port}" basePath="Felo"
+		doc:name="HTTP Listener Configuration" />
+
+	<http:request-config name="HTTP_Request_Configuration"
+		host="${felo.ws.host.url}" port="${felo.ws.host.port}" basePath="Host/Optima"
+		doc:name="HTTP Request Configuration" />
+
+	<http:request-config name="HTTP_TYK_Request_Configuration"
+		host="${api.tyk.host}" port="${api.tyk.port}" basePath="tyk"
+		doc:name="HTTP TYK Request Configuration" />
+
+	<db:mysql-config name="MySQL_Configuration"
+		url="jdbc:mysql://${felo.db.host}:${felo.db.port}/${felo.db.name}?useSSL=false&amp;useServerPrepStmts=false&amp;rewriteBatchedStatements=true"
+		user="${felo.db.user}" password="${felo.db.password}" doc:name="MySQL Configuration" />
+
+	<vm:connector name="Notification_VM" validateConnections="true"
+		doc:name="VM" />
+	<vm:endpoint exchange-pattern="one-way" path="notification"
+		connector-ref="Notification_VM" name="NotificationVM" doc:name="VM" />
+
+	<vm:connector name="File_VM" validateConnections="true"
+		doc:name="VM" />
+
+	<file:connector name="File_Output" outputPattern="#[flowVars.fileName]"
+		doc:name="File" />
+
+	<file:connector name="no-delete-file-connector"
+		autoDelete="false" streaming="true" validateConnections="true"
+		doc:name="File" />
+
+	<spring:beans>
+		<spring:bean id="Bean" name="NonNullMapper"
+			class="org.codehaus.jackson.map.ObjectMapper">
+			<spring:property name="SerializationInclusion">
+				<spring:value
+					type="org.codehaus.jackson.map.annotate.JsonSerialize.Inclusion">NON_NULL</spring:value>
+			</spring:property>
+		</spring:bean>
+	</spring:beans>
+	<tls:context name="TLS_Context" doc:name="TLS Context">
+		<tls:trust-store type="jks" insecure="true" />
+	</tls:context>
+
+	<flow name="inputFile">
+		<mulerequester:request
+			resource="file://#[flowVars['path']]?connector=no-delete-file-connector"
+			throwExceptionOnTimeout="true" doc:name="Request a file" />
+		<!-- <base64-encoder-transformer /> -->
+		<set-payload value="#[org.felo.api.process.ImageConverter.extractBytes(flowVars['path'])]"/>
+	</flow>
+
+	<flow name="saveFile">
+		<vm:inbound-endpoint exchange-pattern="one-way"
+			connector-ref="File_VM" path="save.file" doc:name="VM" />
+		<set-variable variableName="path" value="#[payload['path']]"
+			doc:name="Variable" />
+		<set-variable variableName="fileName"
+			value="#[payload['fileName']].#[payload['fileExtension']]" doc:name="Variable" />
+		<logger level="INFO" message="SAVE to FILE =  #[flowVars['fileName']]" />
+		<set-payload value="#[payload.content]" doc:name="Set Payload" />
+		<file:outbound-endpoint path="${file.base.path}#[flowVars['path']]"
+			connector-ref="File_Output" responseTimeout="10000" doc:name="File" />
+	</flow>
+</mule>

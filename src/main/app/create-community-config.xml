@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:vm="http://www.mulesoft.org/schema/mule/vm" xmlns:file="http://www.mulesoft.org/schema/mule/file"
+	xmlns:json="http://www.mulesoft.org/schema/mule/json" xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd">
+
+	<flow name="registerCommunityBPFlow">
+		<set-payload value="#[flowVars['originalPayload']]"
+			doc:name="Set Payload" />
+		<choice doc:name="Choice">
+			<when expression="#[originalPayload['private'] == 'yes']">
+				<db:insert config-ref="MySQL_Configuration" doc:name="Database">
+					<db:parameterized-query>
+			            <![CDATA[INSERT INTO felo.communities (name,categori_id,description,location,private,email) 
+							SELECT * FROM (SELECT #[originalPayload['name']],#[originalPayload['categoryID']],#[originalPayload['description']],#[originalPayload['location']],b'1',#[originalPayload['email']]) as tmp
+							WHERE NOT EXISTS (
+								SELECT name FROM felo.communities
+									WHERE name=#[originalPayload['name']]
+							)]]>
+			        </db:parameterized-query>
+				</db:insert>
+			</when>
+			<otherwise>
+				<db:insert config-ref="MySQL_Configuration" doc:name="Database">
+					<db:parameterized-query>
+						<![CDATA[INSERT INTO felo.communities (name,categori_id,description,location,private,email) 
+							SELECT * FROM (SELECT #[originalPayload['name']],#[originalPayload['categoryID']],#[originalPayload['description']],#[originalPayload['location']],b'0',#[originalPayload['email']]) as tmp
+							WHERE NOT EXISTS (
+								SELECT name FROM felo.communities
+									WHERE name=#[originalPayload['name']]
+							)]]>
+					</db:parameterized-query>
+				</db:insert>
+			</otherwise>
+		</choice>
+
+		<choice doc:name="Choice">
+			<when expression="#[payload == 0]">
+				<expression-component doc:name="Expression">
+						<![CDATA[responseMap=new java.util.HashMap();
+							responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('DUPLICATE_COMMUNITY');			
+						payload = responseMap;]]>
+				</expression-component>
+			</when>
+			<when expression="#[payload == 1]">
+				<db:select config-ref="MySQL_Configuration" doc:name="Database">
+					<db:parameterized-query>
+					    <![CDATA[SELECT id FROM communities WHERE name=#[originalPayload['name']]]]>
+					</db:parameterized-query>
+				</db:select>
+				<logger level="INFO" message="PAYLOAD DB = #[payload]"
+					doc:name="Logger" />
+				<message-filter onUnaccepted="dataNotFoundFlow"
+					doc:name="Message">
+					<expression-filter expression="#[payload != []]" />
+				</message-filter>
+				<set-variable variableName="id" value="#[payload.get(0)['id']]"
+					doc:name="Variable" />
+				<set-variable
+					value="#[org.felo.api.process.Utils.getRandomNumberInRange(999999)]"
+					variableName="usernamenonpad" doc:name="Variable" />
+				<set-variable
+					value="2#[org.apache.commons.lang.StringUtils.leftPad(usernamenonpad,9,'0')]"
+					variableName="username" doc:name="Variable" />
+
+				<flow-ref name="registerCommunityAccountBP" doc:name="Flow Reference" />
+
+				<choice doc:name="Choice">
+					<when expression="#[flowVars['status'] == 'PROCESSED']">
+						<processor-chain doc:name="Processor Chain">
+							<db:insert config-ref="MySQL_Configuration" doc:name="Database">
+								<db:parameterized-query>
+									<![CDATA[INSERT INTO member_community(member_id,community_id,admin) 
+									   VALUES((SELECT id FROM members WHERE msisdn=#[originalPayload['msisdn']]),
+										   #[flowVars['id']],b'1')]]>
+							    </db:parameterized-query>
+							</db:insert>
+							<message-filter onUnaccepted="dbFailedFlow"
+								doc:name="Message">
+								<expression-filter expression="#[payload == 1]" />
+							</message-filter>
+
+							<expression-component doc:name="Expression">
+								<![CDATA[responseMap=new java.util.HashMap();
+									responseMap['msisdn']=originalPayload['msisdn'];
+									responseMap['categoryID']=originalPayload['categoryID'];
+									responseMap['location']=originalPayload['location'];
+									responseMap['description']=originalPayload['description'];
+									responseMap['name']=originalPayload['name'];
+									responseMap['private']=originalPayload['private'];
+									responseMap['email']=originalPayload['email'];
+									responseMap['emoneyUsername']=flowVars['username'];
+									responseMap['APIKey']=flowVars['APIKey'];
+									responseMap['secretAuth']=flowVars['secretAuth'];
+									responseMap['credential']=flowVars['credential'];
+									responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('PROCESSED');			
+								payload = responseMap;]]>
+							</expression-component>
+							<logger level="INFO"
+								message="[REGISTER COMMUNITY SUCCESS #[originalPayload['msisdn']] : #[payload]]"
+								doc:name="Logger" />
+							<flow-ref name="responseHandlerFlow" doc:name="Flow Reference" />
+						</processor-chain>
+					</when>
+					<otherwise>
+						<processor-chain doc:name="Processor Chain">
+							<db:delete config-ref="MySQL_Configuration" doc:name="Database">
+								<db:parameterized-query>
+									<![CDATA[DELETE FROM felo.communities WHERE id=#[flowVars['id']]]]>
+							    </db:parameterized-query>
+							</db:delete>
+							<message-filter onUnaccepted="dbFailedFlow"
+								doc:name="Message">
+								<expression-filter expression="#[payload == 1]" />
+							</message-filter>
+							<expression-component doc:name="Expression">
+								<![CDATA[responseMap=new java.util.HashMap();
+									responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('FAILED');			
+								payload = responseMap;]]>
+							</expression-component>
+						</processor-chain>
+					</otherwise>
+				</choice>
+			</when>
+			<otherwise>
+				<flow-ref name="dbFailedFlow" doc:name="Flow Reference" />
+			</otherwise>
+		</choice>
+	</flow>
+
+</mule>

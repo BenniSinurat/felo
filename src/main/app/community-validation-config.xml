@@ -1,0 +1,389 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:vm="http://www.mulesoft.org/schema/mule/vm"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" version="CE-3.8.1"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd 
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd">
+
+	<flow name="communityInquiryValidationFlow">
+		<message-filter onUnaccepted="invalidParameterFlow"
+			doc:name="Message">
+			<and-filter doc:name="And">
+				<expression-filter expression="#[originalPayload['token'] != null]" />
+				<expression-filter expression="#[originalPayload['communityID'] != null]" />
+			</and-filter>
+		</message-filter>
+
+		<flow-ref name="tokenValidationFlow" />
+		<choice>
+			<when expression="#[payload.status.message == 'SUCCESS']">
+				<flow-ref name="communityDetailBPFlow" doc:name="Flow Reference" />
+			</when>
+			<otherwise>
+				<logger level="INFO" message="[MEMBER NOT FOUND = #[payload]]" />
+			</otherwise>
+		</choice>
+	</flow>
+
+	<flow name="communityRegisterValidationFlow">
+		<message-filter onUnaccepted="invalidParameterFlow"
+			doc:name="Message">
+			<and-filter doc:name="And">
+				<expression-filter expression="#[originalPayload['token'] != null]" />
+				<expression-filter expression="#[originalPayload['name'] != null]" />
+				<expression-filter expression="#[originalPayload['location'] != null]" />
+				<expression-filter expression="#[originalPayload['private'] != null]" />
+				<expression-filter expression="#[originalPayload['email'] != null]" />
+			</and-filter>
+		</message-filter>
+
+		<flow-ref name="tokenValidationFlow" />
+		<choice>
+			<when expression="#[payload.status.message == 'SUCCESS']">
+				<logger level="INFO" message="[COMMUNITY REGISTER = #[payload]]" />
+				<flow-ref name="registerCommunityBPFlow" />
+			</when>
+			<otherwise>
+				<logger level="INFO" message="[COMMUNITY REGISTER FAILED = #[payload]]" />
+			</otherwise>
+		</choice>
+	</flow>
+
+	<flow name="communityListValidationFlow">
+		<set-payload value="#[flowVars['originalPayload']]" />
+		<message-filter onUnaccepted="invalidParameterFlow"
+			doc:name="Message">
+			<expression-filter expression="#[originalPayload['token'] != null]" />
+		</message-filter>
+
+		<flow-ref name="tokenValidationFlow" />
+		<logger level="INFO"
+			message="[TOKEN VALIDATION STATUS = #[payload.status.message]]" />
+		<choice>
+			<when expression="#[payload.status.message == 'SUCCESS']">
+				<flow-ref name="communityListBPFlow" doc:name="Flow Reference" />
+			</when>
+			<otherwise>
+				<logger level="INFO" message="[MEMBER NOT FOUND = #[payload]]" />
+			</otherwise>
+		</choice>
+	</flow>
+
+	<flow name="communityManageListValidationFlow">
+		<set-payload value="#[flowVars['originalPayload']]" />
+		<message-filter onUnaccepted="invalidParameterFlow"
+			doc:name="Message">
+			<expression-filter expression="#[originalPayload['token'] != null]" />
+		</message-filter>
+
+		<flow-ref name="tokenValidationFlow" />
+		<logger level="INFO"
+			message="[TOKEN VALIDATION STATUS = #[payload.status.message]]" />
+		<choice>
+			<when expression="#[payload.status.message == 'SUCCESS']">
+				<flow-ref name="communityManageListBPFlow" doc:name="Flow Reference" />
+			</when>
+			<otherwise>
+				<logger level="INFO" message="[MEMBER NOT FOUND = #[payload]]" />
+			</otherwise>
+		</choice>
+	</flow>
+
+	<flow name="communitySubscribeListValidationFlow">
+		<set-payload value="#[flowVars['originalPayload']]" />
+		<message-filter onUnaccepted="invalidParameterFlow"
+			doc:name="Message">
+			<expression-filter expression="#[originalPayload['token'] != null]" />
+		</message-filter>
+
+		<flow-ref name="tokenValidationFlow" />
+		<choice>
+			<when expression="#[payload.status.message == 'SUCCESS']">
+				<flow-ref name="communitySubscribeListBPFlow" doc:name="Flow Reference" />
+			</when>
+			<otherwise>
+				<logger level="INFO" message="[MEMBER NOT FOUND = #[payload]]" />
+			</otherwise>
+		</choice>
+	</flow>
+
+	<flow name="communityRecommendListValidationFlow">
+		<set-payload value="#[flowVars['originalPayload']]" />
+		<message-filter onUnaccepted="invalidParameterFlow"
+			doc:name="Message">
+			<and-filter>
+				<expression-filter expression="#[originalPayload['token'] != null]" />
+				<expression-filter expression="#[originalPayload['currentPage'] != null]" />
+				<expression-filter expression="#[originalPayload['pageSize'] != null]" />
+			</and-filter>
+		</message-filter>
+
+		<flow-ref name="tokenValidationFlow" />
+		<choice>
+			<when expression="#[payload.status.message == 'SUCCESS']">
+				<flow-ref name="communityRecommendListBPFlow" doc:name="Flow Reference" />
+			</when>
+			<otherwise>
+				<logger level="INFO" message="[MEMBER NOT FOUND = #[payload]]" />
+			</otherwise>
+		</choice>
+	</flow>
+
+	<flow name="deleteCommunityValidationFlow">
+		<set-payload value="#[flowVars['originalPayload']]" />
+		<message-filter onUnaccepted="invalidParameterFlow"
+			doc:name="Message">
+			<and-filter doc:name="And">
+				<expression-filter expression="#[originalPayload['token'] != null]" />
+				<expression-filter expression="#[originalPayload['communityID'] != null]" />
+			</and-filter>
+		</message-filter>
+
+		<flow-ref name="tokenValidationFlow" />
+		<choice>
+			<when expression="#[payload.status.message == 'SUCCESS']">
+				<flow-ref name="deleteCommunityBPFlow" doc:name="Flow Reference" />
+			</when>
+			<otherwise>
+				<logger level="INFO" message="[MEMBER NOT FOUND = #[payload]]" />
+			</otherwise>
+		</choice>
+	</flow>
+
+	<flow name="joinCommunityValidationFlow">
+		<set-payload value="#[flowVars['originalPayload']]" />
+		<message-filter onUnaccepted="invalidParameterFlow"
+			doc:name="Message">
+			<and-filter doc:name="And">
+				<expression-filter expression="#[originalPayload['token'] != null]" />
+				<expression-filter expression="#[originalPayload['communityID'] != null]" />
+			</and-filter>
+		</message-filter>
+
+		<flow-ref name="tokenValidationFlow" />
+		<choice>
+			<when expression="#[payload.status.message == 'SUCCESS']">
+				<flow-ref name="joinCommunityBPFlow" doc:name="Flow Reference" />
+			</when>
+			<otherwise>
+				<logger level="INFO" message="[MEMBER NOT FOUND = #[payload]]" />
+			</otherwise>
+		</choice>
+	</flow>
+
+	<flow name="approvedCommunityValidationFlow">
+		<set-payload value="#[flowVars['originalPayload']]" />
+		<message-filter onUnaccepted="invalidParameterFlow"
+			doc:name="Message">
+			<and-filter doc:name="And">
+				<expression-filter expression="#[originalPayload['token'] != null]" />
+				<expression-filter expression="#[originalPayload['communityID'] != null]" />
+				<expression-filter expression="#[originalPayload['memberRequest'] != null]" />
+			</and-filter>
+		</message-filter>
+
+		<flow-ref name="tokenValidationFlow" />
+		<choice>
+			<when expression="#[payload.status.message == 'SUCCESS']">
+				<flow-ref name="approvedCommunityBPFlow" doc:name="Flow Reference" />
+			</when>
+			<otherwise>
+				<logger level="INFO" message="[MEMBER NOT FOUND = #[payload]]" />
+			</otherwise>
+		</choice>
+	</flow>
+
+	<flow name="approvedInvitedCommunityValidationFlow">
+		<set-payload value="#[flowVars['originalPayload']]" />
+		<message-filter onUnaccepted="invalidParameterFlow"
+			doc:name="Message">
+			<and-filter doc:name="And">
+				<expression-filter expression="#[originalPayload['token'] != null]" />
+				<expression-filter expression="#[originalPayload['communityID'] != null]" />
+			</and-filter>
+		</message-filter>
+
+		<flow-ref name="tokenValidationFlow" />
+		<choice>
+			<when expression="#[payload.status.message == 'SUCCESS']">
+				<flow-ref name="approvedInvitedCommunityBPFlow" doc:name="Flow Reference" />
+			</when>
+			<otherwise>
+				<logger level="INFO" message="[MEMBER NOT FOUND = #[payload]]" />
+			</otherwise>
+		</choice>
+	</flow>
+
+	<flow name="rejectApprovalCommunityValidationFlow">
+		<set-payload value="#[flowVars['originalPayload']]" />
+		<message-filter onUnaccepted="invalidParameterFlow"
+			doc:name="Message">
+			<and-filter doc:name="And">
+				<expression-filter expression="#[originalPayload['token'] != null]" />
+				<expression-filter expression="#[originalPayload['communityID'] != null]" />
+				<expression-filter expression="#[originalPayload['memberRequest'] != null]" />
+			</and-filter>
+		</message-filter>
+
+		<flow-ref name="tokenValidationFlow" />
+		<choice>
+			<when expression="#[payload.status.message == 'SUCCESS']">
+				<flow-ref name="rejectApprovalCommunityBPFlow" doc:name="Flow Reference" />
+			</when>
+			<otherwise>
+				<logger level="INFO" message="[MEMBER NOT FOUND = #[payload]]" />
+			</otherwise>
+		</choice>
+	</flow>
+
+	<flow name="rejectInvitedCommunityValidationFlow">
+		<set-payload value="#[flowVars['originalPayload']]" />
+		<message-filter onUnaccepted="invalidParameterFlow"
+			doc:name="Message">
+			<and-filter doc:name="And">
+				<expression-filter expression="#[originalPayload['token'] != null]" />
+				<expression-filter expression="#[originalPayload['communityID'] != null]" />
+			</and-filter>
+		</message-filter>
+
+		<flow-ref name="tokenValidationFlow" />
+		<choice>
+			<when expression="#[payload.status.message == 'SUCCESS']">
+				<flow-ref name="rejectInvitedCommunityBPFlow" doc:name="Flow Reference" />
+			</when>
+			<otherwise>
+				<logger level="INFO" message="[MEMBER NOT FOUND = #[payload]]" />
+			</otherwise>
+		</choice>
+	</flow>
+
+	<flow name="pendingApprovalCommunityValidationFlow">
+		<set-payload value="#[flowVars['originalPayload']]" />
+		<message-filter onUnaccepted="invalidParameterFlow"
+			doc:name="Message">
+			<and-filter doc:name="And">
+				<expression-filter expression="#[originalPayload['token'] != null]" />
+				<expression-filter expression="#[originalPayload['communityID'] != null]" />
+			</and-filter>
+		</message-filter>
+
+		<flow-ref name="tokenValidationFlow" />
+		<choice>
+			<when expression="#[payload.status.message == 'SUCCESS']">
+				<flow-ref name="pendingApprovalCommunityListBPFlow"
+					doc:name="Flow Reference" />
+			</when>
+			<otherwise>
+				<logger level="INFO" message="[MEMBER NOT FOUND = #[payload]]" />
+			</otherwise>
+		</choice>
+	</flow>
+
+	<flow name="editCommunityValidationFlow">
+		<message-filter onUnaccepted="invalidParameterFlow"
+			doc:name="Message">
+			<and-filter>
+				<expression-filter expression="#[originalPayload['token'] != null]" />
+				<expression-filter expression="#[originalPayload['communityID'] != null]" />
+			</and-filter>
+		</message-filter>
+
+		<flow-ref name="tokenValidationFlow" />
+		<choice>
+			<when expression="#[payload.status.message == 'SUCCESS']">
+				<flow-ref name="editCommunityBPFlow" />
+			</when>
+			<otherwise>
+				<logger level="INFO" message="[EDIT COMMUNITY FAILED = #[payload]]" />
+			</otherwise>
+		</choice>
+	</flow>
+
+	<flow name="inviteFriendsValidationFlow">
+		<set-payload value="#[flowVars['originalPayload']]" />
+		<message-filter onUnaccepted="invalidParameterFlow"
+			doc:name="Message">
+			<and-filter doc:name="And">
+				<expression-filter expression="#[originalPayload['token'] != null]" />
+				<expression-filter expression="#[originalPayload['communityID'] != null]" />
+				<expression-filter expression="#[originalPayload['toMember'] != null]" />
+			</and-filter>
+		</message-filter>
+
+		<flow-ref name="tokenValidationFlow" />
+		<choice>
+			<when expression="#[payload.status.message == 'SUCCESS']">
+				<flow-ref name="inviteFriendsBPFlow" doc:name="Flow Reference" />
+			</when>
+			<otherwise>
+				<logger level="INFO" message="[MEMBER NOT FOUND = #[payload]]" />
+			</otherwise>
+		</choice>
+	</flow>
+
+	<flow name="listInviteFriendsValidationFlow">
+		<set-payload value="#[flowVars['originalPayload']]" />
+		<message-filter onUnaccepted="invalidParameterFlow"
+			doc:name="Message">
+			<and-filter doc:name="And">
+				<expression-filter expression="#[originalPayload['token'] != null]" />
+				<expression-filter expression="#[originalPayload['communityID'] != null]" />
+			</and-filter>
+		</message-filter>
+
+		<flow-ref name="tokenValidationFlow" />
+		<choice>
+			<when expression="#[payload.status.message == 'SUCCESS']">
+				<flow-ref name="listInviteFriendsBPFlow" doc:name="Flow Reference" />
+			</when>
+			<otherwise>
+				<logger level="INFO" message="[MEMBER NOT FOUND = #[payload]]" />
+			</otherwise>
+		</choice>
+	</flow>
+
+	<flow name="searchCommunityValidationFlow">
+		<set-payload value="#[flowVars['originalPayload']]" />
+		<message-filter onUnaccepted="invalidParameterFlow"
+			doc:name="Message">
+			<and-filter doc:name="And">
+				<expression-filter expression="#[originalPayload['token'] != null]" />
+				<expression-filter expression="#[originalPayload['communityName'] != null]" />
+			</and-filter>
+		</message-filter>
+
+		<flow-ref name="tokenValidationFlow" />
+		<choice>
+			<when expression="#[payload.status.message == 'SUCCESS']">
+				<flow-ref name="searchCommunityBPFlow" doc:name="Flow Reference" />
+			</when>
+			<otherwise>
+				<logger level="INFO" message="[MEMBER NOT FOUND = #[payload]]" />
+			</otherwise>
+		</choice>
+	</flow>
+
+	<flow name="pictureCommunityValidationFlow">
+		<message-filter onUnaccepted="invalidParameterFlow"
+			doc:name="Message">
+			<and-filter>
+				<expression-filter expression="#[originalPayload['token'] != null]" />
+				<expression-filter expression="#[originalPayload['communityID'] != null]" />
+			</and-filter>
+		</message-filter>
+
+		<flow-ref name="tokenValidationFlow" />
+		<choice>
+			<when expression="#[payload.status.message == 'SUCCESS']">
+				<flow-ref name="pictureCommunityBPFlow" />
+			</when>
+			<otherwise>
+				<logger level="INFO" message="[PICTURE COMMUNITY FAILED = #[payload]]" />
+			</otherwise>
+		</choice>
+	</flow>
+</mule>

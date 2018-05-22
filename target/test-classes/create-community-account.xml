@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:json="http://www.mulesoft.org/schema/mule/json"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" version="CE-3.8.1"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd 
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd 
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd">
+
+	<flow name="registerCommunityAccountBP">
+		<set-variable
+			value="62#[org.apache.commons.lang.StringUtils.substring(originalPayload['msisdn'],1)]"
+			variableName="Msisdn" doc:name="Variable" />
+		<set-variable
+			value="/email=#[originalPayload['email']]/msisdn=#[flowVars['Msisdn']]/name=#[originalPayload['name']]/username=#[flowVars['username']]"
+			variableName="requestAuthContent" />
+		<expression-transformer
+			expression="#[originalPayload['requestAuthContent']=requestAuthContent;originalPayload]"
+			doc:name="Expression" />
+		<flow-ref name="generateHash" />
+		<flow-ref name="registerPartner" />
+		<choice doc:name="Choice">
+			<when expression="#[payload.status.message == 'PROCESSED']">
+				<logger level="INFO"
+					message="[ACCOUNTS RESPONSE #[originalPayload['msisdn']] : #[payload]]"
+					doc:name="Logger" />
+				<db:update config-ref="MySQL_Configuration" doc:name="Database">
+					<db:parameterized-query>
+		            	<![CDATA[UPDATE communities SET api_key=#[flowVars['APIKey']],
+		            					secret_auth=#[flowVars['secretAuth']],
+		            					credential=MD5(#[flowVars['credential']]),
+		            					username=#[flowVars['username']]
+		            			WHERE id=#[flowVars['id']]]]>
+					</db:parameterized-query>
+				</db:update>
+				<message-filter onUnaccepted="dbFailedFlow" doc:name="Message">
+					<expression-filter expression="#[payload == 1]" />
+				</message-filter>
+				<expression-component doc:name="Expression">
+					<![CDATA[responseMap = new java.util.HashMap();
+						responseMap['status'] = org.felo.api.data.StatusBuilder.getStatus('PROCESSED');
+					payload = responseMap;]]>
+				</expression-component>
+				<flow-ref name="responseHandlerFlow" doc:name="Flow Reference" />
+				<json:json-to-object-transformer
+					returnClass="java.lang.Object" doc:name="JSON to Object" />
+				<logger level="INFO"
+					message="[REGISTER PARTNER SUCCESS #[originalPayload['msisdn']] : #[payload]]"
+					doc:name="Logger" />
+			</when>
+			<otherwise>
+				<logger level="INFO"
+					message="[REGISTER PARTNER FAILED #[originalPayload['msisdn']] : #[payload]]"
+					doc:name="Logger" />
+			</otherwise>
+		</choice>
+		<flow-ref name="responseHandlerFlow" doc:name="Flow Reference" />
+	</flow>
+	<sub-flow name="registerPartner">
+		<expression-component doc:name="Expression">
+			<![CDATA[responseMap = new java.util.HashMap();
+				responseMap['username'] = flowVars['username'];
+				responseMap['email'] = originalPayload['email'];
+				responseMap['name'] = originalPayload['name'];
+				responseMap['msisdn'] = flowVars['Msisdn'];
+			payload = responseMap;]]>
+		</expression-component>
+		<http:request config-ref="HTTP_Request_Configuration"
+			path="Partner/Register" method="POST" doc:name="HTTP">
+			<http:request-builder>
+				<http:header headerName="Content-Type"
+					value="application/x-www-form-urlencoded" />
+				<http:header headerName="APIKey" value="${api.key}" />
+				<http:header value="#[originalPayload['requestAuth']]"
+					headerName="requestAuth" />
+				<http:query-param paramName="username"
+					value="#[flowVars['username']]" />
+				<http:query-param paramName="email"
+					value="#[originalPayload['email']]" />
+				<http:query-param paramName="name"
+					value="#[originalPayload['name']]" />
+				<http:query-param paramName="msisdn"
+					value="#[flowVars['Msisdn']]" />
+			</http:request-builder>
+			<http:success-status-code-validator
+				values="200,400,401,403,404,440,444,498,500,503,504,505,598,599" />
+		</http:request>
+		<json:json-to-object-transformer
+			returnClass="java.lang.Object" doc:name="JSON to Object" />
+		<logger level="INFO" message="REGISTER ACCOUNT = #[payload]" />
+		<set-variable value="#[payload.status.message]"
+			variableName="status" doc:name="Variable" />
+		<set-variable value="#[payload['APIKey']]" variableName="APIKey"
+			doc:name="Variable" />
+		<set-variable value="#[payload['credential']]"
+			variableName="credential" doc:name="Variable" />
+		<set-variable value="#[payload['secretAuth']]"
+			variableName="secretAuth" doc:name="Variable" />
+	</sub-flow>
+</mule>

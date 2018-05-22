@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:json="http://www.mulesoft.org/schema/mule/json"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" version="CE-3.8.1"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd 
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd">
+
+	<flow name="categoryDetailBPFlow">
+		<set-payload value="#[flowVars['originalPayload']]"
+			doc:name="Set Payload" />
+		<db:select config-ref="MySQL_Configuration" doc:name="Database">
+			<db:parameterized-query>
+            	<![CDATA[SELECT id, category, description, url_picture 
+            		FROM categories where id=#[originalPayload['categoryID']]]]>
+			</db:parameterized-query>
+		</db:select>
+		<logger level="INFO" message="PAYLOAD DB = #[payload]"
+			doc:name="Logger" />
+		<message-filter onUnaccepted="dataNotFoundFlow"
+			doc:name="Message">
+			<expression-filter expression="#[payload != []]" />
+		</message-filter>
+		<set-variable variableName="name" value="#[payload.get(0)['name']]" />
+		<set-variable variableName="id" value="#[payload.get(0)['id']]"
+			doc:name="Variable" />
+		<set-variable variableName="category"
+			value="#[payload.get(0)['category']]" doc:name="Variable" />
+		<set-variable variableName="description"
+			value="#[payload.get(0)['description']]" doc:name="Variable" />
+		<set-variable variableName="catPic"
+			value="#[payload.get(0)['url_picture']]" doc:name="Variable" />
+
+		<choice>
+			<when expression="#[flowVars['catPic'] == null]">
+				<logger level="INFO" message="CATEGORY PICTURE =#[flowVars['catPic']]" />
+			</when>
+			<otherwise>
+				<set-variable value="#[flowVars['catPic']]"
+					variableName="path" />
+				<flow-ref name="inputFile" doc:name="Flow Reference" />
+				<set-variable value="#[payload]" variableName="catPic"
+					doc:name="Variable" />
+			</otherwise>
+		</choice>
+
+		<expression-component doc:name="Expression">
+			<![CDATA[
+				responseMap=new java.util.HashMap();
+				responseMap['categoryID']=flowVars['id'];
+				responseMap['category']=flowVars['category'];
+				responseMap['description']=flowVars['description'];
+				responseMap['categoryPicture']=flowVars['catPic'];
+				responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('PROCESSED');			
+			payload = responseMap;]]>
+		</expression-component>
+		<json:object-to-json-transformer
+			doc:name="Object to JSON" />
+
+	</flow>
+</mule>

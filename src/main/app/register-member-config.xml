@@ -1,0 +1,520 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:json="http://www.mulesoft.org/schema/mule/json"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd">
+
+	<flow name="registerMemberBPFlow">
+		<set-payload value="#[flowVars['originalPayload']]"
+			doc:name="Set Payload" />
+		<expression-component doc:name="Expression">
+			<![CDATA[
+				regMap = new java.util.HashMap();
+				regMap['methodType']= 'GET';			
+				regMap['name']= 'TokenAPIConfigMap';
+				regMap['key']= 'tokenApi';
+			payload = regMap;]]>
+		</expression-component>
+		<pooled-component>
+			<spring-object bean="CacheProcessor" />
+		</pooled-component>
+		<set-variable value="#[payload]" variableName="tokenAPI"
+			doc:name="Variable" />
+		<choice doc:name="Choice">
+			<when expression="#[flowVars['tokenAPI'] == null]">
+				<flow-ref name="loginPartnerFlow" doc:name="Flow Reference" />
+			</when>
+			<otherwise>
+				<logger level="INFO" message="Token API != null" doc:name="Logger"/>
+			</otherwise>
+		</choice>
+		<set-variable
+			value="#[org.mule.util.StringUtils.split(originalPayload['ticketID'],':')[0]]"
+			variableName="ticketId" doc:name="Variable"/>
+	
+		<set-variable
+			value="/email=#[originalPayload['email']]/name=#[originalPayload['name']]/otp=#[originalPayload['otp']]/ticketID=#[flowVars['ticketId']]/token=#[flowVars['tokenAPI']]"
+			variableName="requestAuthContent" doc:name="Variable"/>
+		<expression-transformer
+			expression="#[originalPayload['requestAuthContent']=requestAuthContent;originalPayload]"
+			doc:name="Expression" />
+		<flow-ref name="generateHash" doc:name="Flow Reference"/>
+		<flow-ref name="registerMember" doc:name="Flow Reference"/>
+		<set-variable value="${group.id.member}" variableName="groupID" doc:name="Variable"/>
+		<choice doc:name="Choice">
+			<when expression="#[flowVars['status'] == 'SESSION_EXPIRED']">
+				<processor-chain doc:name="Processor Chain">
+					<flow-ref name="loginPartnerFlow" doc:name="Flow Reference" />
+					<choice doc:name="Choice">
+						<when expression="#[payload.status.message == 'PROCESSED']">
+							<flow-ref name="registerMember" doc:name="Flow Reference" />
+							<choice doc:name="Choice">
+								<when expression="#[flowVars['status'] == 'PROCESSED']">
+									<processor-chain doc:name="Processor Chain">
+										<db:insert config-ref="MySQL_Configuration"
+											doc:name="Database">
+											<db:parameterized-query>
+												<![CDATA[INSERT INTO members(group_id,name,msisdn,email,uid) 
+															SELECT * FROM (SELECT #[flowVars['groupID']],#[originalPayload['name']],#[originalPayload['msisdn']],
+															#[originalPayload['email']],#[originalPayload['uid']]) as tmp
+																WHERE NOT EXISTS(
+																	SELECT msisdn, email from felo.members
+																		WHERE msisdn=#[originalPayload['msisdn']] OR email=#[originalPayload['email']]
+												)]]>
+											</db:parameterized-query>
+										</db:insert>
+										<choice doc:name="Choice">
+											<when expression="#[payload == 0]">
+												<expression-component doc:name="Expression">
+													<![CDATA[responseMap= new java.util.HashMap();
+														responseMap['msisdn']= originalPayload['msisdn'];
+														responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('MEMBER_ALREADY_REGISTERED');			
+													payload = responseMap;]]>
+												</expression-component>
+											</when>
+											<when expression="#[payload == 1]">
+												<set-variable variableName="action" value="DECRYPT"
+													doc:name="Variable" />
+												<set-variable variableName="password"
+													value="#[originalPayload['password']]" doc:name="Variable" />
+												<pooled-component>
+													<spring-object bean="LoginCredentialHandler" />
+												</pooled-component>
+												<set-variable variableName="cred" value="#[payload]"
+													doc:name="Variable" />
+												<logger level="INFO"
+													message="DECRYPT PASSWORD = #[flowVars['cred']]" doc:name="Logger"/>
+												<choice doc:name="Choice">
+													<when expression="#[flowVars['cred'] != 'PIN_ERROR']">
+														<db:insert config-ref="MySQL_Configuration"
+															doc:name="Database">
+															<db:parameterized-query>
+																<![CDATA[INSERT INTO accounts(member_id,username,password) 
+																	VALUES((SELECT id FROM members WHERE msisdn=#[originalPayload.msisdn]),#[originalPayload['msisdn']],MD5(#[flowVars['cred']]))]]>
+															</db:parameterized-query>
+														</db:insert>
+														<message-filter onUnaccepted="dbFailedFlow"
+															doc:name="Message">
+															<expression-filter expression="#[payload == 1]" />
+														</message-filter>
+														<expression-component doc:name="Expression">
+															<![CDATA[responseMap= new java.util.HashMap();
+																responseMap['msisdn']= originalPayload['msisdn'];
+																responseMap['name']= originalPayload['name'];
+																responseMap['email']= originalPayload['email'];
+																responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('PROCESSED');			
+															payload = responseMap;]]>
+														</expression-component>
+														<logger level="INFO"
+															message="[REGISTER MEMBER SUCCESS #[originalPayload['msisdn']] : #[payload]]"
+															doc:name="Logger" />
+													</when>
+													<otherwise>
+														<db:delete config-ref="MySQL_Configuration"
+															doc:name="Database">
+															<db:parameterized-query>
+																<![CDATA[DELETE FROM felo.members WHERE msisdn=#[originalPayload['msisdn']]]]>
+															</db:parameterized-query>
+														</db:delete>
+														<message-filter onUnaccepted="dbFailedFlow"
+															doc:name="Message">
+															<expression-filter expression="#[payload == 1]" />
+														</message-filter>
+														<expression-component doc:name="Expression">
+															<![CDATA[responseMap= new java.util.HashMap();
+																responseMap['msisdn']= originalPayload['msisdn'];
+																responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('PIN_ERROR');			
+															payload = responseMap;]]>
+														</expression-component>
+														<logger level="INFO"
+															message="[REGISTER MEMBER FAILED #[originalPayload['msisdn']] : #[payload]]"
+															doc:name="Logger" />
+													</otherwise>
+												</choice>
+											</when>
+											<otherwise>
+												<flow-ref name="dbFailedFlow" doc:name="Flow Reference"/>
+											</otherwise>
+										</choice>
+									</processor-chain>
+								</when>
+								<when>
+									<and-filter doc:name="And">
+										<expression-filter expression="#[flowVars['status'] == 'INVALID_OTP']" />
+										<expression-filter expression="#[flowVars['checkTicketID'] == false]" />
+									</and-filter>
+									<processor-chain doc:name="Processor Chain">
+										<choice doc:name="Choice">
+											<when expression="#[flowVars['otp'] == originalPayload['otp']]">
+												<processor-chain doc:name="Processor Chain">
+													<set-variable value="${group.id.member}"
+														variableName="groupID" doc:name="Variable"/>
+													<db:insert config-ref="MySQL_Configuration"
+														doc:name="Database">
+														<db:parameterized-query>
+															<![CDATA[INSERT INTO members(group_id,name,msisdn,email,uid) 
+																	SELECT * FROM (SELECT #[flowVars['groupID']],#[originalPayload['name']],#[originalPayload['msisdn']],
+																	#[originalPayload['email']],#[originalPayload['uid']]) as tmp
+																WHERE NOT EXISTS(
+																	SELECT msisdn, email from felo.members
+																		WHERE msisdn=#[originalPayload['msisdn']] OR email=#[originalPayload['email']]
+																)]]>
+														</db:parameterized-query>
+													</db:insert>
+													<choice doc:name="Choice">
+														<when expression="#[payload == 0]">
+															<expression-component doc:name="Expression">
+																<![CDATA[responseMap= new java.util.HashMap();
+																	responseMap['msisdn']= originalPayload['msisdn'];
+																	responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('MEMBER_ALREADY_REGISTERED');			
+																payload = responseMap;]]>
+															</expression-component>
+														</when>
+														<when expression="#[payload == 1]">
+															<set-variable variableName="action" value="DECRYPT"
+																doc:name="Variable" />
+															<set-variable variableName="password"
+																value="#[originalPayload['password']]" doc:name="Variable" />
+															<pooled-component>
+																<spring-object bean="LoginCredentialHandler" />
+															</pooled-component>
+															<set-variable variableName="cred" value="#[payload]"
+																doc:name="Variable" />
+															<logger level="INFO" message="DECRYPT PASSWORD = #[payload]" doc:name="Logger"/>
+															<choice doc:name="Choice">
+																<when expression="#[flowVars['cred'] != 'PIN_ERROR']">
+																	<db:insert config-ref="MySQL_Configuration"
+																		doc:name="Database">
+																		<db:parameterized-query>
+																			<![CDATA[INSERT INTO accounts(member_id,username,password) 
+																				VALUES((SELECT id FROM members WHERE msisdn=#[originalPayload.msisdn]),#[originalPayload['msisdn']],MD5(#[flowVars['cred']]))]]>
+																		</db:parameterized-query>
+																	</db:insert>
+																	<message-filter onUnaccepted="dbFailedFlow"
+																		doc:name="Message">
+																		<expression-filter expression="#[payload == 1]" />
+																	</message-filter>
+																	<expression-component doc:name="Expression">
+																		<![CDATA[responseMap= new java.util.HashMap();
+																			responseMap['msisdn']= originalPayload['msisdn'];
+																			responseMap['name']= originalPayload['name'];
+																			responseMap['email']= originalPayload['email'];
+																			responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('PROCESSED');			
+																		payload = responseMap;]]>
+																	</expression-component>
+																	<logger level="INFO"
+																		message="[REGISTER MEMBER SUCCESS #[originalPayload['msisdn']] : #[payload]]"
+																		doc:name="Logger" />
+																</when>
+																<otherwise>
+																	<db:delete config-ref="MySQL_Configuration"
+																		doc:name="Database">
+																		<db:parameterized-query>
+																			<![CDATA[DELETE FROM felo.members WHERE msisdn=#[originalPayload['msisdn']]]]>
+																		</db:parameterized-query>
+																	</db:delete>
+																	<message-filter onUnaccepted="dbFailedFlow"
+																		doc:name="Message">
+																		<expression-filter expression="#[payload == 1]" />
+																	</message-filter>
+																	<expression-component doc:name="Expression">
+																		<![CDATA[responseMap= new java.util.HashMap();
+																			responseMap['msisdn']= originalPayload['msisdn'];
+																			responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('PIN_ERROR');			
+																		payload = responseMap;]]>
+																	</expression-component>
+																	<logger level="INFO"
+																		message="[REGISTER MEMBER FAILED #[originalPayload['msisdn']] : #[payload]]"
+																		doc:name="Logger" />
+																</otherwise>
+															</choice>
+														</when>
+														<otherwise>
+															<flow-ref name="dbFailedFlow" doc:name="Flow Reference"/>
+														</otherwise>
+													</choice>
+												</processor-chain>
+											</when>
+											<otherwise>
+												<expression-component doc:name="Expression">
+													<![CDATA[responseMap= new java.util.HashMap();
+														responseMap['msisdn']= originalPayload['msisdn'];
+														responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('INVALID_OTP');			
+													payload = responseMap;]]>
+												</expression-component>
+												<logger level="INFO"
+													message="[REGISTER MEMBER FAILED #[originalPayload['msisdn']] : OTP VALIDATION FAILED]"
+													doc:name="Logger" />
+											</otherwise>
+										</choice>
+									</processor-chain>
+								</when>
+								<otherwise>
+									<logger level="INFO"
+										message="[REGISTER MEMBER FAILED #[originalPayload['msisdn']] : #[payload]]"
+										doc:name="Logger" />
+								</otherwise>
+							</choice>
+						</when>
+						<otherwise>
+							<logger level="INFO"
+								message="[REGISTER MEMBER FAILED #[originalPayload['msisdn']] : #[payload]]"
+								doc:name="Logger" />
+						</otherwise>
+					</choice>
+				</processor-chain>
+			</when>
+			<when expression="#[flowVars['status'] == 'PROCESSED']">
+				<processor-chain doc:name="Processor Chain">
+					<db:insert config-ref="MySQL_Configuration" doc:name="Database">
+						<db:parameterized-query>
+							<![CDATA[INSERT INTO members(group_id,name,msisdn,email,uid) 
+										SELECT * FROM (SELECT #[flowVars['groupID']],#[originalPayload['name']],#[originalPayload['msisdn']],
+										#[originalPayload['email']],#[originalPayload['uid']]) as tmp
+											WHERE NOT EXISTS(
+												SELECT msisdn, email from felo.members
+													WHERE msisdn=#[originalPayload['msisdn']] OR email=#[originalPayload['email']]
+							)]]>
+						</db:parameterized-query>
+					</db:insert>
+					<choice doc:name="Choice">
+						<when expression="#[payload == 0]">
+							<expression-component doc:name="Expression">
+							<![CDATA[responseMap= new java.util.HashMap();
+								responseMap['msisdn']= originalPayload['msisdn'];
+								responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('MEMBER_ALREADY_REGISTERED');			
+							payload = responseMap;]]>
+							</expression-component>
+						</when>
+						<when expression="#[payload == 1]">
+							<set-variable variableName="action" value="DECRYPT"
+								doc:name="Variable" />
+							<set-variable variableName="password"
+								value="#[originalPayload['password']]" doc:name="Variable" />
+							<pooled-component>
+								<spring-object bean="LoginCredentialHandler" />
+							</pooled-component>
+							<set-variable variableName="cred" value="#[payload]"
+								doc:name="Variable" />
+							<choice doc:name="Choice">
+								<when expression="#[flowVars['cred'] != 'PIN_ERROR']">
+									<db:insert config-ref="MySQL_Configuration" doc:name="Database">
+										<db:parameterized-query>
+											<![CDATA[INSERT INTO accounts(member_id,username,password) 
+												VALUES((SELECT id FROM members WHERE msisdn=#[originalPayload.msisdn]),#[originalPayload['msisdn']],MD5(#[flowVars['cred']]))]]>
+										</db:parameterized-query>
+									</db:insert>
+									<message-filter onUnaccepted="dbFailedFlow"
+										doc:name="Message">
+										<expression-filter expression="#[payload == 1]" />
+									</message-filter>
+									<expression-component doc:name="Expression">
+									<![CDATA[responseMap= new java.util.HashMap();
+										responseMap['msisdn']= originalPayload['msisdn'];
+										responseMap['name']= originalPayload['name'];
+										responseMap['email']= originalPayload['email'];
+										responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('PROCESSED');			
+									payload = responseMap;]]>
+									</expression-component>
+									<logger level="INFO"
+										message="[REGISTER MEMBER SUCCESS #[originalPayload['msisdn']] : #[payload]]"
+										doc:name="Logger" />
+								</when>
+								<otherwise>
+									<db:delete config-ref="MySQL_Configuration" doc:name="Database">
+										<db:parameterized-query>
+											<![CDATA[DELETE FROM felo.members WHERE msisdn=#[originalPayload['msisdn']]]]>
+										</db:parameterized-query>
+									</db:delete>
+									<message-filter onUnaccepted="dbFailedFlow"
+										doc:name="Message">
+										<expression-filter expression="#[payload == 1]" />
+									</message-filter>
+									<expression-component doc:name="Expression">
+										<![CDATA[responseMap= new java.util.HashMap();
+											responseMap['msisdn']= originalPayload['msisdn'];
+											responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('PIN_ERROR');			
+										payload = responseMap;]]>
+									</expression-component>
+									<logger level="INFO"
+										message="[REGISTER MEMBER FAILED #[originalPayload['msisdn']] : #[payload]]"
+										doc:name="Logger" />
+								</otherwise>
+							</choice>
+						</when>
+						<otherwise>
+							<db:delete config-ref="MySQL_Configuration" doc:name="Database">
+								<db:parameterized-query>
+									<![CDATA[DELETE FROM felo.members WHERE msisdn=#[originalPayload['msisdn']]]]>
+								</db:parameterized-query>
+							</db:delete>
+							<message-filter onUnaccepted="dbFailedFlow"
+								doc:name="Message">
+								<expression-filter expression="#[payload == 1]" />
+							</message-filter>
+							<flow-ref name="dbFailedFlow" doc:name="Flow Reference"/>
+						</otherwise>
+					</choice>
+				</processor-chain>
+			</when>
+			<when>
+				<and-filter doc:name="And">
+					<expression-filter expression="#[flowVars['status'] == 'INVALID_OTP']" />
+					<expression-filter expression="#[flowVars['checkTicketID'] == false]" />
+				</and-filter>
+				<processor-chain doc:name="Processor Chain">
+					<choice doc:name="Choice">
+						<when expression="#[flowVars['otp'] == originalPayload['otp']]">
+							<processor-chain doc:name="Processor Chain">
+								<db:insert config-ref="MySQL_Configuration" doc:name="Database">
+									<db:parameterized-query>
+										<![CDATA[INSERT INTO members(group_id,name,msisdn,email,uid) 
+													SELECT * FROM (SELECT #[flowVars['groupID']],#[originalPayload['name']],#[originalPayload['msisdn']],
+														#[originalPayload['email']],#[originalPayload['uid']]) as tmp
+															WHERE NOT EXISTS(
+																SELECT msisdn, email from felo.members
+																	WHERE msisdn=#[originalPayload['msisdn']] OR email=#[originalPayload['email']]
+											)]]>
+									</db:parameterized-query>
+								</db:insert>
+								<choice doc:name="Choice">
+									<when expression="#[payload == 0]">
+										<expression-component doc:name="Expression">
+											<![CDATA[responseMap= new java.util.HashMap();
+												responseMap['msisdn']= originalPayload['msisdn'];
+												responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('MEMBER_ALREADY_REGISTERED');			
+											payload = responseMap;]]>
+										</expression-component>
+									</when>
+									<when expression="#[payload == 1]">
+										<set-variable variableName="action" value="DECRYPT"
+											doc:name="Variable" />
+										<set-variable variableName="password"
+											value="#[originalPayload['password']]" doc:name="Variable" />
+										<pooled-component>
+											<spring-object bean="LoginCredentialHandler" />
+										</pooled-component>
+										<set-variable variableName="cred" value="#[payload]"
+											doc:name="Variable" />
+										<choice doc:name="Choice">
+											<when expression="#[flowVars['cred'] != 'PIN_ERROR']">
+												<db:insert config-ref="MySQL_Configuration"
+													doc:name="Database">
+													<db:parameterized-query>
+														<![CDATA[INSERT INTO accounts(member_id,username,password) 
+															VALUES((SELECT id FROM members WHERE msisdn=#[originalPayload.msisdn]),#[originalPayload['msisdn']],MD5(#[flowVars['cred']]))]]>
+													</db:parameterized-query>
+												</db:insert>
+												<message-filter onUnaccepted="dbFailedFlow"
+													doc:name="Message">
+													<expression-filter expression="#[payload == 1]" />
+												</message-filter>
+												<expression-component doc:name="Expression">
+													<![CDATA[responseMap= new java.util.HashMap();
+														responseMap['msisdn']= originalPayload['msisdn'];
+														responseMap['name']= originalPayload['name'];
+														responseMap['email']= originalPayload['email'];
+														responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('PROCESSED');			
+													payload = responseMap;]]>
+												</expression-component>
+												<logger level="INFO"
+													message="[REGISTER MEMBER SUCCESS #[originalPayload['msisdn']] : #[payload]]"
+													doc:name="Logger" />
+											</when>
+											<otherwise>
+												<db:delete config-ref="MySQL_Configuration"
+													doc:name="Database">
+													<db:parameterized-query>
+														<![CDATA[DELETE FROM felo.members WHERE msisdn=#[originalPayload['msisdn']]]]>
+													</db:parameterized-query>
+												</db:delete>
+												<message-filter onUnaccepted="dbFailedFlow"
+													doc:name="Message">
+													<expression-filter expression="#[payload == 1]" />
+												</message-filter>
+												<expression-component doc:name="Expression">
+													<![CDATA[responseMap= new java.util.HashMap();
+														responseMap['msisdn']= originalPayload['msisdn'];
+														responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('PIN_ERROR');			
+													payload = responseMap;]]>
+												</expression-component>
+												<logger level="INFO"
+													message="[REGISTER MEMBER FAILED #[originalPayload['msisdn']] : #[payload]]"
+													doc:name="Logger" />
+											</otherwise>
+										</choice>
+									</when>
+									<otherwise>
+										<flow-ref name="dbFailedFlow" doc:name="Flow Reference"/>
+									</otherwise>
+								</choice>
+							</processor-chain>
+						</when>
+						<otherwise>
+							<expression-component doc:name="Expression">
+								<![CDATA[responseMap= new java.util.HashMap();
+									responseMap['msisdn']= originalPayload['msisdn'];
+									responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('INVALID_OTP');			
+								payload = responseMap;]]>
+							</expression-component>
+							<logger level="INFO"
+								message="[REGISTER MEMBER FAILED #[originalPayload['msisdn']] : OTP VALIDATION FAILED]"
+								doc:name="Logger" />
+						</otherwise>
+					</choice>
+				</processor-chain>
+			</when>
+			<otherwise>
+				<processor-chain doc:name="Processor Chain">
+					<logger level="INFO"
+						message="[REGISTER MEMBER FAILED #[originalPayload['msisdn']] : #[payload]]"
+						doc:name="Logger" />
+				</processor-chain>
+			</otherwise>
+		</choice>
+	</flow>
+
+	<sub-flow name="registerMember">
+		<expression-component doc:name="Expression">
+			<![CDATA[responseMap = new java.util.HashMap();
+				responseMap['name'] = originalPayload['name'];
+				responseMap['email'] = originalPayload['email'];
+				responseMap['otp'] = originalPayload['otp'];		
+				responseMap['token'] = originalPayload['tokenAPI'];
+				responseMap['ticketID'] = flowVars['ticketId'];
+			payload = responseMap;]]>
+		</expression-component>
+		<http:request config-ref="HTTP_Request_Configuration"
+			path="Member" method="POST" doc:name="HTTP">
+			<http:request-builder>
+				<http:header headerName="Content-Type"
+					value="application/x-www-form-urlencoded" />
+				<http:header headerName="APIKey" value="${api.key}" />
+				<http:header headerName="requestAuth"
+					value="#[originalPayload['requestAuth']]" />
+				<http:query-param paramName="name"
+					value="#[originalPayload['name']]" />
+				<http:query-param paramName="email"
+					value="#[originalPayload['email']]" />
+				<http:query-param paramName="otp"
+					value="#[originalPayload['otp']]" />
+				<http:query-param paramName="ticketID"
+					value="#[flowVars['ticketId']]" />
+				<http:query-param paramName="token"
+					value="#[originalPayload['tokenAPI']]" />
+			</http:request-builder>
+			<http:success-status-code-validator
+				values="200,400,401,403,404,440,444" />
+		</http:request>
+		<json:json-to-object-transformer
+			returnClass="java.lang.Object" doc:name="JSON to Object" />
+		<set-variable value="#[payload.status.message]"
+			variableName="status" doc:name="Variable" />
+	</sub-flow>
+</mule>

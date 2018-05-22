@@ -1,0 +1,299 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:json="http://www.mulesoft.org/schema/mule/json"
+	xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd">
+
+	<flow name="communityListBPFlow">
+		<set-payload value="#[flowVars['originalPayload']]"
+			doc:name="Set Payload" />
+		<db:select config-ref="MySQL_Configuration" doc:name="Database">
+			<db:parameterized-query>
+            	<![CDATA[SELECT c.id, c.name, c.profile_picture, c.username,
+            		(SELECT COUNT(*) FROM felo.member_community WHERE member_id=(SELECT id FROM felo.members WHERE msisdn=#[originalPayload['msisdn']])) as communities 
+            			FROM member_community mc 
+            			INNER JOIN members m ON mc.member_id = m.id 
+            			INNER JOIN communities c ON mc.community_id = c.id 
+            				WHERE mc.member_id=(SELECT id FROM felo.members WHERE msisdn=#[originalPayload.msisdn])]]>
+			</db:parameterized-query>
+		</db:select>
+		<logger level="INFO" message="RESPONSE #[payload]" />
+		<message-filter onUnaccepted="dataNotFoundFlow"
+			doc:name="Message">
+			<expression-filter expression="#[payload != []]" />
+		</message-filter>
+		<set-variable value="#[new String(payload.get(0)['communities'])]"
+			variableName="total" doc:name="Variable" />
+
+		<set-variable variableName="trxMaps" value="#[new java.util.ArrayList()]"
+			doc:name="Variable" />
+
+		<foreach collection="#[payload]" doc:name="For Each">
+			<set-variable variableName="trxPayload" value="#[new java.util.HashMap()]"
+				doc:name="Variable" />
+			<set-variable variableName="id" value="#[new String(payload.'id')]"
+				doc:name="Variable" />
+			<set-variable variableName="name" value="#[payload.'name']"
+				doc:name="Variable" />
+			<set-variable variableName="username" value="#[payload.'username']"
+				doc:name="Variable" />
+			<set-variable variableName="profPic"
+				value="#[payload.'profile_picture']" doc:name="Variable" />
+				
+			<db:select config-ref="MySQL_Configuration" doc:name="Database">
+				<db:parameterized-query>
+	            	<![CDATA[SELECT COUNT(*) as members FROM felo.member_community WHERE community_id=#[flowVars['id']]]]>
+				</db:parameterized-query>
+			</db:select>
+			
+			<set-variable variableName="members" value="#[payload.get(0)['members']]"
+				doc:name="Variable" />
+
+			<expression-transformer expression="#[trxPayload['id']=flowVars.id;trxPayload]"
+				doc:name="Expression" />
+
+			<expression-transformer
+				expression="#[trxPayload['name']=flowVars.name;trxPayload]"
+				doc:name="Expression" />
+				
+			<expression-transformer
+				expression="#[trxPayload['username']=flowVars.username;trxPayload]"
+				doc:name="Expression" />
+
+			<expression-transformer
+				expression="#[trxPayload['profilePicture']=flowVars.profPic;trxPayload]"
+				doc:name="Expression" />
+				
+			<expression-transformer
+				expression="#[trxPayload['members']=flowVars.members;trxPayload]"
+				doc:name="Expression" />
+
+			<expression-component doc:name="Expression">
+				<![CDATA[trxMaps.add(trxPayload);]]>
+			</expression-component>
+
+		</foreach>
+		<expression-component doc:name="Expression">
+			<![CDATA[
+				responseMap=new java.util.HashMap();
+				responseMap['msisdn']=originalPayload['msisdn'];
+				responseMap['total']=flowVars['total'];
+				responseMap['Communities']=flowVars['trxMaps'];
+				responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('PROCESSED');			
+			payload = responseMap;]]>
+		</expression-component>
+	</flow>
+
+	<flow name="communityManageListBPFlow">
+		<set-payload value="#[flowVars['originalPayload']]"
+			doc:name="Set Payload" />
+		<db:select config-ref="MySQL_Configuration" doc:name="Database">
+			<db:parameterized-query>
+            	<![CDATA[SELECT c.id, c.name, c.profile_picture, 
+						(SELECT COUNT(*) FROM felo.member_community WHERE member_id=(SELECT id FROM felo.members WHERE msisdn=#[originalPayload['msisdn']]) AND admin='1') as communities 
+						FROM felo.member_community mc 
+							INNER JOIN felo.members m ON mc.member_id = m.id 
+							INNER JOIN felo.communities c ON mc.community_id = c.id 
+									WHERE m.msisdn=#[originalPayload['msisdn']] AND mc.admin='1']]>
+			</db:parameterized-query>
+		</db:select>
+		<logger level="INFO" message="RESPONSE #[payload]" />
+		<message-filter onUnaccepted="dataNotFoundFlow"
+			doc:name="Message">
+			<expression-filter expression="#[payload != []]" />
+		</message-filter>
+		<set-variable value="#[new String(payload.get(0)['communities'])]"
+			variableName="total" doc:name="Variable" />
+
+		<set-variable variableName="trxMaps" value="#[new java.util.ArrayList()]"
+			doc:name="Variable" />
+
+		<foreach collection="#[payload]" doc:name="For Each">
+			<set-variable variableName="trxPayload" value="#[new java.util.HashMap()]"
+				doc:name="Variable" />
+			<set-variable variableName="id" value="#[new String(payload.'id')]"
+				doc:name="Variable" />
+			<set-variable variableName="name" value="#[payload.'name']"
+				doc:name="Variable" />
+			<set-variable variableName="profPic"
+				value="#[payload.'profile_picture']" doc:name="Variable" />
+				
+			<db:select config-ref="MySQL_Configuration" doc:name="Database">
+				<db:parameterized-query>
+	            	<![CDATA[SELECT COUNT(*) as members FROM felo.member_community WHERE community_id=#[flowVars['id']]]]>
+				</db:parameterized-query>
+			</db:select>
+			
+			<set-variable variableName="members" value="#[payload.get(0)['members']]"
+				doc:name="Variable" />
+
+			<expression-transformer expression="#[trxPayload['id']=flowVars.id;trxPayload]"
+				doc:name="Expression" />
+
+			<expression-transformer
+				expression="#[trxPayload['name']=flowVars.name;trxPayload]"
+				doc:name="Expression" />
+
+			<expression-transformer
+				expression="#[trxPayload['profilePicture']=flowVars.profPic;trxPayload]"
+				doc:name="Expression" />
+				
+			<expression-transformer
+				expression="#[trxPayload['members']=flowVars.members;trxPayload]"
+				doc:name="Expression" />
+
+			<expression-component doc:name="Expression">
+				<![CDATA[trxMaps.add(trxPayload);]]>
+			</expression-component>
+
+		</foreach>
+		<expression-component doc:name="Expression">
+			<![CDATA[
+				responseMap=new java.util.HashMap();
+				responseMap['msisdn']=originalPayload['msisdn'];
+				responseMap['total']=flowVars['total'];
+				responseMap['manageCommunities']=flowVars['trxMaps'];
+				responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('PROCESSED');			
+			payload = responseMap;]]>
+		</expression-component>
+	</flow>
+
+	<flow name="communitySubscribeListBPFlow">
+		<set-payload value="#[flowVars['originalPayload']]"
+			doc:name="Set Payload" />
+		<db:select config-ref="MySQL_Configuration" doc:name="Database">
+			<db:parameterized-query>
+            	<![CDATA[SELECT c.id, c.name, c.profile_picture,
+            		(SELECT COUNT(*) FROM felo.member_community WHERE member_id=(SELECT id FROM felo.members WHERE msisdn=#[originalPayload['msisdn']]) AND admin='0' AND approved='0') as communities 
+            		FROM member_community mc 
+            		INNER JOIN members m ON mc.member_id = m.id 
+            		INNER JOIN communities c ON mc.community_id = c.id 
+            			WHERE m.msisdn=#[originalPayload.msisdn] AND mc.admin='0' AND mc.approved='0']]>
+			</db:parameterized-query>
+		</db:select>
+		<message-filter onUnaccepted="dataNotFoundFlow"
+			doc:name="Message">
+			<expression-filter expression="#[payload != []]" />
+		</message-filter>
+		<set-variable variableName="total"
+			value="#[new String(payload.get(0)['communities'])]" doc:name="Variable" />
+		<set-variable variableName="trxMaps" value="#[new java.util.ArrayList()]"
+			doc:name="Variable" />
+
+		<foreach collection="#[payload]" doc:name="For Each">
+			<set-variable variableName="trxPayload" value="#[new java.util.HashMap()]"
+				doc:name="Variable" />
+			<set-variable variableName="id" value="#[new String(payload.'id')]"
+				doc:name="Variable" />
+			<set-variable variableName="name" value="#[payload.'name']"
+				doc:name="Variable" />
+			<set-variable variableName="profPic"
+				value="#[payload.'profile_picture']" doc:name="Variable" />
+
+			<db:select config-ref="MySQL_Configuration" doc:name="Database">
+				<db:parameterized-query>
+	            	<![CDATA[SELECT COUNT(*) as members FROM felo.member_community WHERE community_id=#[flowVars['id']]]]>
+				</db:parameterized-query>
+			</db:select>
+			
+			<set-variable variableName="members" value="#[payload.get(0)['members']]"
+				doc:name="Variable" />
+
+			<expression-transformer expression="#[trxPayload['id']=flowVars.id;trxPayload]"
+				doc:name="Expression" />
+
+			<expression-transformer
+				expression="#[trxPayload['name']=flowVars.name;trxPayload]"
+				doc:name="Expression" />
+				
+			<expression-transformer
+				expression="#[trxPayload['members']=flowVars.members;trxPayload]"
+				doc:name="Expression" />
+
+			<expression-transformer
+				expression="#[trxPayload['profilePicture']=flowVars.profPic;trxPayload]"
+				doc:name="Expression" />
+
+			<expression-component doc:name="Expression">
+				<![CDATA[trxMaps.add(trxPayload);]]>
+			</expression-component>
+
+		</foreach>
+		<expression-component doc:name="Expression">
+			<![CDATA[
+				responseMap=new java.util.HashMap();
+				responseMap['msisdn']=originalPayload['msisdn'];
+				responseMap['total']=flowVars['total'];
+				responseMap['subscribeCommunities']=flowVars['trxMaps'];
+				responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('PROCESSED');			
+			payload = responseMap;]]>
+		</expression-component>
+	</flow>
+
+	<flow name="communityRecommendListBPFlow">
+		<set-payload value="#[flowVars['originalPayload']]"
+			doc:name="Set Payload" />
+		<db:select config-ref="MySQL_Configuration" doc:name="Database">
+			<db:parameterized-query>
+            	<![CDATA[SELECT c.id, c.name, c.profile_picture,
+            		(SELECT COUNT(*) FROM felo.member_community WHERE community_id=mc.community_id) as members 
+            			FROM member_community mc 
+            			INNER JOIN members m ON mc.member_id = m.id 
+            			INNER JOIN communities c ON mc.community_id = c.id AND m.msisdn=#[originalPayload.msisdn]
+            		LIMIT #[Integer.parseInt(originalPayload['currentPage'])], #[Integer.parseInt(originalPayload['pageSize'])]]]>
+			</db:parameterized-query>
+		</db:select>
+		<message-filter onUnaccepted="dataNotFoundFlow"
+			doc:name="Message">
+			<expression-filter expression="#[originalPayload['msisdn'] != []]" />
+		</message-filter>
+		<set-variable variableName="trxMaps" value="#[new java.util.ArrayList()]"
+			doc:name="Variable" />
+
+		<foreach collection="#[payload]" doc:name="For Each">
+			<set-variable variableName="trxPayload" value="#[new java.util.HashMap()]"
+				doc:name="Variable" />
+			<set-variable variableName="id" value="#[new String(payload.'id')]"
+				doc:name="Variable" />
+			<set-variable variableName="name" value="#[payload.'name']"
+				doc:name="Variable" />
+			<set-variable variableName="members" value="#[payload.'members']"
+				doc:name="Variable" />
+			<set-variable variableName="profPic"
+				value="#[payload.'profile_picture']" doc:name="Variable" />
+				
+			<expression-transformer expression="#[trxPayload['id']=flowVars.id;trxPayload]"
+				doc:name="Expression" />
+
+			<expression-transformer
+				expression="#[trxPayload['name']=flowVars.name;trxPayload]"
+				doc:name="Expression" />
+
+			<expression-transformer
+				expression="#[trxPayload['members']=flowVars.members;trxPayload]"
+				doc:name="Expression" />
+
+			<expression-transformer
+				expression="#[trxPayload['profilePicture']=flowVars.profPic;trxPayload]"
+				doc:name="Expression" />
+
+			<expression-component doc:name="Expression">
+				<![CDATA[trxMaps.add(trxPayload);]]>
+			</expression-component>
+
+		</foreach>
+		<expression-component doc:name="Expression">
+			<![CDATA[
+				responseMap=new java.util.HashMap();
+				responseMap['msisdn']=originalPayload['msisdn'];
+				responseMap['recommendCommunities']=flowVars['trxMaps'];
+				responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('PROCESSED');			
+			payload = responseMap;]]>
+		</expression-component>
+	</flow>
+</mule>

@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:json="http://www.mulesoft.org/schema/mule/json"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" version="CE-3.8.1"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd 
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd">
+
+	<flow name="emoneyConfirmPartnerPaymentBP">
+		<set-payload value="#[flowVars['originalPayload']]"
+			doc:name="Set Payload" />
+		<expression-component doc:name="Expression">
+			<![CDATA[
+				regMap = new java.util.HashMap();
+				regMap['methodType']= 'GET';			
+				regMap['name']= 'TokenAPIConfigMap';
+				regMap['key']= 'tokenApi';
+			payload = regMap;]]>
+		</expression-component>
+		<pooled-component>
+			<spring-object bean="CacheProcessor" />
+		</pooled-component>
+		<set-variable variableName="tokenAPI" value="#[payload]"
+			doc:name="Variable" />
+		<choice>
+			<when expression="#[flowVars['tokenAPI'] == null]">
+				<flow-ref name="loginPartnerFlow" doc:name="Flow Reference" />
+			</when>
+			<otherwise>
+				<logger level="INFO" message="Token API != null" />
+			</otherwise>
+		</choice>
+		<choice>
+			<when expression="#[originalPayload['otp'] == '']">
+				<set-variable
+					value="/requestID=#[originalPayload['requestID']]/token=#[flowVars['tokenAPI']]"
+					variableName="requestAuthContent" />
+			</when>
+			<otherwise>
+				<set-variable
+					value="/otp=#[originalPayload['otp']]/requestID=#[originalPayload['requestID']]/token=#[flowVars['tokenAPI']]"
+					variableName="requestAuthContent" />
+			</otherwise>
+		</choice>
+
+		<expression-transformer
+			expression="#[originalPayload['requestAuthContent']=requestAuthContent;originalPayload]"
+			doc:name="Expression" />
+		<flow-ref name="generateHash" />
+		<flow-ref name="confirmPartnerPayment" />
+		<choice doc:name="Choice">
+			<when expression="#[flowVars['status'] == 'SESSION_EXPIRED']">
+				<processor-chain doc:name="Processor Chain">
+					<flow-ref name="loginPartnerFlow" doc:name="Flow Reference" />
+					<choice doc:name="Choice">
+						<when expression="#[payload.status.message == 'PROCESSED']">
+							<flow-ref name="confirmPartnerPayment" doc:name="Flow Reference" />
+							<logger level="INFO"
+								message="[CONFIRM PARTNER PAYMENT #[originalPayload['msisdn']] : #[payload]]"
+								doc:name="Logger" />
+						</when>
+						<otherwise>
+							<logger level="INFO"
+								message="[LOGIN PARTNER FAILED #[originalPayload['msisdn']] : #[payload]]"
+								doc:name="Logger" />
+						</otherwise>
+					</choice>
+				</processor-chain>
+			</when>
+			<otherwise>
+				<processor-chain doc:name="Processor Chain">
+					<logger level="INFO"
+						message="[CONFIRM PARTNER PAYMENT #[originalPayload['msisdn']] : #[payload]]"
+						doc:name="Logger" />
+				</processor-chain>
+			</otherwise>
+		</choice>
+		<flow-ref name="responseHandlerFlow" doc:name="Flow Reference" />
+	</flow>
+	<sub-flow name="confirmPartnerPayment">
+		<http:request config-ref="HTTP_Request_Configuration"
+			path="Emoney/Member/ConfirmPartnerPayment" method="POST" doc:name="HTTP">
+			<http:request-builder>
+				<http:header headerName="Content-Type"
+					value="application/x-www-form-urlencoded" />
+				<http:header headerName="APIKey" value="${api.key}" />
+				<http:header value="#[originalPayload['requestAuth']]"
+					headerName="requestAuth" />
+				<http:query-param paramName="otp"
+					value="#[originalPayload['otp']]" />
+				<http:query-param paramName="requestID"
+					value="#[originalPayload['requestID']]" />
+				<http:query-param paramName="token"
+					value="#[flowVars['tokenAPI']]" />
+			</http:request-builder>
+			<http:success-status-code-validator
+				values="200,400,401,403,404,440" />
+		</http:request>
+		<json:json-to-object-transformer
+			returnClass="java.lang.Object" doc:name="JSON to Object" />
+		<set-variable value="#[payload.status.message]"
+			variableName="status" doc:name="Variable" />
+	</sub-flow>
+</mule>

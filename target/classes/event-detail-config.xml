@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:json="http://www.mulesoft.org/schema/mule/json"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" version="CE-3.8.1"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd 
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd">
+
+	<flow name="eventDetailBPFlow">
+		<set-payload value="#[flowVars['originalPayload']]"
+			doc:name="Set Payload" />
+		<db:select config-ref="MySQL_Configuration" doc:name="Database">
+			<db:parameterized-query>
+            	<![CDATA[SELECT ed.id, ed.start_date, ed.end_date, ed.name as event, ed.location, ed.agenda, ed.event_picture, ed.action, c.name as communityName
+            		FROM event_details ed 
+            			INNER JOIN events e ON ed.id=e.event_detail_id 
+            			INNER JOIN communities c ON e.community_id=c.id 
+            		AND ed.id=#[originalPayload['eventID']]]]>
+			</db:parameterized-query>
+		</db:select>
+		<logger level="INFO" message="PAYLOAD DB = #[payload]"
+			doc:name="Logger" />
+		<message-filter onUnaccepted="dataNotFoundFlow"
+			doc:name="Message">
+			<expression-filter expression="#[payload != []]" />
+		</message-filter>
+
+		<set-variable variableName="name" value="#[payload.get(0)['name']]" />
+		<set-variable variableName="id" value="#[payload.get(0)['id']]"
+			doc:name="Variable" />
+		<set-variable variableName="location"
+			value="#[payload.get(0)['location']]" doc:name="Variable" />
+		<set-variable variableName="startDate"
+			value="#[payload.get(0)['start_date']]" doc:name="Variable" />
+		<set-variable variableName="endDate"
+			value="#[payload.get(0)['end_date']]" doc:name="Variable" />
+		<set-variable variableName="event" value="#[payload.get(0)['event']]"
+			doc:name="Variable" />
+		<set-variable variableName="agenda" value="#[payload.get(0)['agenda']]"
+			doc:name="Variable" />
+		<set-variable variableName="action" value="#[payload.get(0)['action']]"
+			doc:name="Variable" />
+		<set-variable variableName="communityName"
+			value="#[payload.get(0)['communityName']]" doc:name="Variable" />
+		<set-variable variableName="eventPic"
+			value="#[payload.get(0)['event_picture']]" doc:name="Variable" />
+			
+		<expression-component doc:name="Expression">
+			<![CDATA[responseMap=new java.util.HashMap();
+				responseMap['msisdn']=originalPayload['msisdn'];
+				responseMap['name']=flowVars['name'];
+				responseMap['id']=flowVars['id'];
+				responseMap['location']=flowVars['location'];
+				responseMap['startDate']=flowVars['startDate'];
+				responseMap['endDate']=flowVars['endDate'];
+				responseMap['event']=flowVars['event'];
+				responseMap['agenda']=flowVars['agenda'];
+				responseMap['action']=flowVars['action'];
+				responseMap['communityName']=flowVars['communityName'];
+				responseMap['eventPicture']=flowVars['eventPic'];
+				responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('PROCESSED');			
+			payload = responseMap;]]>
+		</expression-component>
+	</flow>
+</mule>

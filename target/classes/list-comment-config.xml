@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" version="CE-3.8.1"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd">
+
+	<flow name="commentListBPFlow">
+		<set-payload value="#[flowVars['originalPayload']]"
+			doc:name="Set Payload" />
+		<db:select config-ref="MySQL_Configuration" doc:name="Database">
+			<db:parameterized-query>
+            	<![CDATA[SELECT (SELECT COUNT(*) FROM felo.comments WHERE timeline_id=#[originalPayload['timelineID']]) as count,
+							c.id, c.comment, c.created_date, c.modified_date, m.name, m.msisdn, m.profile_picture
+							FROM felo.comments c
+								INNER JOIN felo.members m ON m.id=c.member_id
+							WHERE timeline_id=#[originalPayload['timelineID']]
+							LIMIT #[Integer.parseInt(originalPayload['currentPage'])], #[Integer.parseInt(originalPayload['pageSize'])]]]>
+			</db:parameterized-query>
+		</db:select>
+		<logger level="INFO" message="PAYLOAD DB = #[payload]"
+			doc:name="Logger" />
+		<message-filter onUnaccepted="dataNotFoundFlow"
+			doc:name="Message">
+			<expression-filter expression="#[payload != []]" />
+		</message-filter>
+
+		<set-variable variableName="trxMaps" value="#[new java.util.ArrayList()]"
+			doc:name="Variable" />
+
+		<foreach collection="#[payload]" doc:name="For Each">
+			<set-variable variableName="trxPayload" value="#[new java.util.HashMap()]"
+				doc:name="Variable" />
+			<set-variable variableName="id" value="#[payload.'id']"
+				doc:name="Variable" />
+			<set-variable variableName="name" value="#[payload.'name']"
+				doc:name="Variable" />
+			<set-variable variableName="msisdn" value="#[payload.'msisdn']"
+				doc:name="Variable" />
+			<set-variable variableName="comment" value="#[payload.'comment']"
+				doc:name="Variable" />
+			<set-variable variableName="createdDate" value="#[payload.'created_date']"
+				doc:name="Variable" />
+			<set-variable variableName="modifiedDate" value="#[payload.'modified_date']"
+				doc:name="Variable" />
+			<set-variable variableName="profPic"
+				value="#[payload.'profile_picture']" doc:name="Variable" />
+
+			<db:select config-ref="MySQL_Configuration" doc:name="Database">
+				<db:parameterized-query>
+            	<![CDATA[SELECT (SELECT EXISTS (SELECT 1/0 FROM felo.comments WHERE member_id=(SELECT id FROM felo.members WHERE msisdn=#[originalPayload['msisdn']] AND id=#[flowVars['id']]))) as isMe
+							FROM felo.comments c
+								INNER JOIN felo.members m ON m.id=c.member_id
+							WHERE timeline_id=#[originalPayload['timelineID']]
+							LIMIT #[Integer.parseInt(originalPayload['currentPage'])], #[Integer.parseInt(originalPayload['pageSize'])]]]>
+			</db:parameterized-query>
+			</db:select>
+			<logger level="INFO" message="PAYLOAD DB = #[payload]"
+				doc:name="Logger" />
+			<message-filter onUnaccepted="dataNotFoundFlow"
+				doc:name="Message">
+				<expression-filter expression="#[payload != []]" />
+			</message-filter>
+
+			<set-variable variableName="isMe" value="#[payload.get(0)['isMe']]"
+				doc:name="Variable" />
+
+			<choice>
+				<when expression="#[flowVars['isMe'] == 1]">
+					<set-variable value="yes" variableName="isme" />
+				</when>
+				<otherwise>
+					<set-variable value="no" variableName="isme" />
+				</otherwise>
+			</choice>
+
+			<expression-transformer expression="#[trxPayload['id']=flowVars.id;trxPayload]"
+				doc:name="Expression" />
+
+			<expression-transformer
+				expression="#[trxPayload['name']=flowVars.name;trxPayload]"
+				doc:name="Expression" />
+
+			<expression-transformer
+				expression="#[trxPayload['msisdn']=flowVars.msisdn;trxPayload]"
+				doc:name="Expression" />
+
+			<expression-transformer
+				expression="#[trxPayload['comment']=flowVars.comment;trxPayload]"
+				doc:name="Expression" />
+
+			<expression-transformer
+				expression="#[trxPayload['profilePicture']=flowVars.profPic;trxPayload]"
+				doc:name="Expression" />
+
+			<set-variable
+				value="#[org.felo.api.process.Utils.formatDate(flowVars['createdDate'])]"
+				variableName="credDate" doc:name="Variable" />
+			<expression-transformer
+				expression="#[trxPayload['createdDate']=flowVars.credDate;trxPayload]"
+				doc:name="Expression" />
+
+			<set-variable
+				value="#[org.felo.api.process.Utils.formatDate(flowVars['modifiedDate'])]"
+				variableName="modDate" doc:name="Variable" />
+			<expression-transformer
+				expression="#[trxPayload['modifiedDate']=flowVars.modDate;trxPayload]"
+				doc:name="Expression" />
+
+			<expression-transformer
+				expression="#[trxPayload['isMe']=flowVars.isme;trxPayload]"
+				doc:name="Expression" />
+
+
+			<expression-component doc:name="Expression">
+				<![CDATA[trxMaps.add(trxPayload);]]>
+			</expression-component>
+
+		</foreach>
+
+		<expression-component doc:name="Expression">
+			<![CDATA[
+				responseMap=new java.util.HashMap();
+				responseMap['msisdn']=originalPayload['msisdn'];
+				responseMap['totalComment']=payload.get(0)['count'];
+				responseMap['comments']=flowVars['trxMaps'];
+				responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('PROCESSED');			
+			payload = responseMap;]]>
+		</expression-component>
+	</flow>
+</mule>

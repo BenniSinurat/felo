@@ -1,0 +1,210 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd">
+
+	<flow name="registerMemberValidationFlow">
+		<message-filter onUnaccepted="invalidParameterFlow"
+			doc:name="Message">
+			<and-filter doc:name="And">
+				<expression-filter expression="#[originalPayload['name'] != null]" />
+				<expression-filter expression="#[originalPayload['email'] != null]" />
+				<expression-filter expression="#[originalPayload['password'] != null]" />
+				<expression-filter expression="#[originalPayload['otp'] != null]" />
+				<expression-filter expression="#[originalPayload['ticketID'] != null]" />
+				<expression-filter expression="#[originalPayload['uid'] != null]" />
+			</and-filter>
+		</message-filter>
+		<expression-component doc:name="Expression">
+			<![CDATA[
+				regMap = new java.util.HashMap();
+				regMap['methodType']= 'GET';			
+				regMap['name']= 'RegisterTicketTokenMap';
+				regMap['key']= originalPayload['ticketID'];
+			payload = regMap;]]>
+		</expression-component>
+		<pooled-component>
+			<spring-object bean="CacheProcessor" />
+		</pooled-component>
+		
+		<choice>
+			<when expression="#[payload != null]">
+				<set-variable
+					value="#[org.apache.commons.lang.StringUtils.contains(originalPayload['ticketID'],'-')]"
+					variableName="checkTicketID" doc:name="Variable" />
+				<logger level="INFO" message="Check Ticket ID : #[flowVars['checkTicketID']]" />
+				<choice>
+					<when expression="#[flowVars['checkTicketID'] == false]">
+						<expression-transformer
+							expression="#[originalPayload['msisdn']=payload['msisdn'];originalPayload]"
+							doc:name="Expression" />
+
+						<logger level="INFO"
+							message="MSISDN = #[payload] / Ticket ID = #[flowVars['checkTicketID']] / OTP #[payload['otp'] == originalPayload['otp']]"
+							doc:name="Logger" />
+						
+						<set-variable value="#[payload['otp']]" variableName="otp" />
+						
+						<choice>
+							<when expression="#[flowVars['otp'] == originalPayload['otp']]">
+								<flow-ref name="loginPartnerFlow" doc:name="Flow Reference" />
+								<choice doc:name="Choice">
+									<when expression="#[payload.status.message == 'PROCESSED']">
+										<flow-ref name="registerMemberBPFlow" doc:name="Flow Reference" />
+									</when>
+									<otherwise>
+										<logger level="INFO" message="[LOGIN PARTNER FAILED = #[payload]]"
+											doc:name="Logger" />
+									</otherwise>
+								</choice>
+							</when>
+							<otherwise>
+								<expression-component doc:name="Expression">
+									<![CDATA[responseMap = new java.util.HashMap();
+										responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('INVALID_OTP');			
+									payload = responseMap;]]>
+								</expression-component>
+							</otherwise>
+						</choice>
+					</when>
+					<otherwise>
+						<expression-transformer
+							expression="#[originalPayload['msisdn']=payload;originalPayload]"
+							doc:name="Expression" />
+						<flow-ref name="loginPartnerFlow" doc:name="Flow Reference" />
+						<choice doc:name="Choice">
+							<when expression="#[payload.status.message == 'PROCESSED']">
+
+								<flow-ref name="registerMemberBPFlow" doc:name="Flow Reference" />
+							</when>
+							<otherwise>
+								<logger level="INFO" message="[LOGIN PARTNER FAILED = #[payload]]"
+									doc:name="Logger" />
+							</otherwise>
+						</choice>
+					</otherwise>
+				</choice>
+			</when>
+			<otherwise>
+				<expression-component doc:name="Expression">
+					<![CDATA[
+					responseMap = new java.util.HashMap();
+					responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('FAILED');			
+					payload = responseMap;]]>
+				</expression-component>
+			</otherwise>
+		</choice>
+	</flow>
+
+	<flow name="OTPRegisterMemberValidationFlow">
+		<message-filter onUnaccepted="invalidParameterFlow"
+			doc:name="Message">
+			<expression-filter expression="#[originalPayload['msisdn'] != null]" />
+		</message-filter>
+
+		<flow-ref name="loginPartnerFlow" doc:name="Flow Reference" />
+		<choice doc:name="Choice">
+			<when expression="#[payload.status.message == 'PROCESSED']">
+				<flow-ref name="OTPRegisterMemberBPFlow" doc:name="Flow Reference" />
+			</when>
+			<otherwise>
+				<logger level="INFO" message="[LOGIN PARTNER FAILED = #[payload]]"
+					doc:name="Logger" />
+			</otherwise>
+		</choice>
+	</flow>
+
+	<flow name="kycMemberValidationFlow">
+		<message-filter onUnaccepted="invalidParameterFlow"
+			doc:name="Message">
+			<and-filter>
+				<expression-filter expression="#[originalPayload['token'] != null]" />
+				<expression-filter expression="#[originalPayload['profilePicture'] != null]" />
+				<expression-filter expression="#[originalPayload['identityPicture'] != null]" />
+				<expression-filter expression="#[originalPayload['idCardNo'] != null]" />
+			</and-filter>
+		</message-filter>
+
+		<flow-ref name="tokenValidationFlow" doc:name="Flow Reference" />
+		<choice doc:name="Choice">
+			<when expression="#[payload.status.message == 'SUCCESS']">
+				<flow-ref name="kycMemberBPFlow" doc:name="Flow Reference" />
+			</when>
+			<otherwise>
+				<logger level="INFO" message="[MEMBER NOT FOUND = #[payload]]"
+					doc:name="Logger" />
+			</otherwise>
+		</choice>
+	</flow>
+
+	<flow name="changeCredentialValidationFlow">
+		<message-filter onUnaccepted="invalidParameterFlow"
+			doc:name="Message">
+			<and-filter>
+				<expression-filter expression="#[originalPayload['token'] != null]" />
+				<expression-filter expression="#[originalPayload['oldCredential'] != null]" />
+				<expression-filter expression="#[originalPayload['newCredential'] != null]" />
+			</and-filter>
+		</message-filter>
+
+		<flow-ref name="tokenValidationFlow" doc:name="Flow Reference" />
+		<choice doc:name="Choice">
+			<when expression="#[payload.status.message == 'SUCCESS']">
+				<flow-ref name="changeCredentialBPFlow" doc:name="Flow Reference" />
+			</when>
+			<otherwise>
+				<logger level="INFO" message="[MEMBER NOT FOUND = #[payload]]"
+					doc:name="Logger" />
+			</otherwise>
+		</choice>
+	</flow>
+
+	<flow name="resetCredentialValidationFlow">
+		<message-filter onUnaccepted="invalidParameterFlow"
+			doc:name="Message">
+			<and-filter>
+				<expression-filter expression="#[originalPayload['email'] != null]" />
+				<expression-filter expression="#[originalPayload['msisdn'] != null]" />
+			</and-filter>
+		</message-filter>
+		<flow-ref name="resetCredentialBPFlow" doc:name="Flow Reference" />
+	</flow>
+
+	<flow name="profileInqValidationFlow">
+		<message-filter onUnaccepted="invalidParameterFlow"
+			doc:name="Message">
+			<expression-filter expression="#[originalPayload['token'] != null]" />
+		</message-filter>
+
+		<flow-ref name="tokenValidationFlow" doc:name="Flow Reference" />
+		<choice doc:name="Choice">
+			<when expression="#[payload.status.message == 'SUCCESS']">
+				<flow-ref name="profileInqBPFlow" doc:name="Flow Reference" />
+			</when>
+			<otherwise>
+				<logger level="INFO" message="[MEMBER NOT FOUND = #[payload]]"
+					doc:name="Logger" />
+			</otherwise>
+		</choice>
+	</flow>
+
+	<flow name="editProfileInqValidationFlow">
+		<message-filter onUnaccepted="invalidParameterFlow"
+			doc:name="Message">
+			<expression-filter expression="#[originalPayload['token'] != null]" />
+		</message-filter>
+
+		<flow-ref name="tokenValidationFlow" doc:name="Flow Reference" />
+		<choice doc:name="Choice">
+			<when expression="#[payload.status.message == 'SUCCESS']">
+				<flow-ref name="editProfileMemberBPFlow" doc:name="Flow Reference" />
+			</when>
+			<otherwise>
+				<logger level="INFO" message="[MEMBER NOT FOUND = #[payload]]"
+					doc:name="Logger" />
+			</otherwise>
+		</choice>
+	</flow>
+</mule>

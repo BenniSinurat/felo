@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:vm="http://www.mulesoft.org/schema/mule/vm" xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" version="CE-3.8.1"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd 
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd">
+
+	<flow name="registerCategoryBPFlow">
+		<set-payload value="#[flowVars['originalPayload']]"
+			doc:name="Set Payload" />
+		<db:select config-ref="MySQL_Configuration" doc:name="Database">
+			<db:parameterized-query>
+            	<![CDATA[SELECT id,category FROM felo.categories WHERE category=#[originalPayload.name]]]>
+			</db:parameterized-query>
+		</db:select>
+		<choice>
+			<when expression="#[payload == []]">
+				<db:insert config-ref="MySQL_Configuration" doc:name="Database">
+					<db:parameterized-query>
+		            	<![CDATA[INSERT INTO categories (category,sub_category,description) 
+		            		VALUES(#[originalPayload.name],#[originalPayload.subCategory],#[originalPayload.description])]]>
+		            </db:parameterized-query>
+				</db:insert>
+				<message-filter onUnaccepted="dbFailedFlow" doc:name="Message">
+					<expression-filter expression="#[payload == 1]" />
+				</message-filter>
+				<db:select config-ref="MySQL_Configuration" doc:name="Database">
+					<db:parameterized-query>
+		            	<![CDATA[SELECT id FROM felo.categories WHERE category=#[originalPayload.name]]]>
+					</db:parameterized-query>
+				</db:select>
+				<set-variable variableName="categoryID" value="#[payload.get(0)['id']]" />
+				<set-variable
+					value="${file.base.path}Category/#[flowVars['categoryID']]/categoryPicture.#[originalPayload['categoryPicture']['fileExtension']]"
+					variableName="catPic" doc:name="Variable" />
+				<db:update config-ref="MySQL_Configuration" doc:name="Database">
+					<db:parameterized-query>
+		            	<![CDATA[UPDATE categories SET url_picture=#[flowVars['catPic']] 
+		            			WHERE id=#[flowVars['categoryID']]]]>
+					</db:parameterized-query>
+				</db:update>
+				<message-filter onUnaccepted="dbFailedFlow" doc:name="Message">
+					<expression-filter expression="#[payload == 1]" />
+				</message-filter>
+				<set-variable value="Category/#[flowVars['categoryID']]"
+					variableName="path" doc:name="Variable" />
+				<expression-component doc:name="Expression">
+					<![CDATA[regMap=new java.util.HashMap();
+						regMap['path']=flowVars['path'];
+						regMap['content']=originalPayload.categoryPicture['content'];
+						regMap['fileExtension']=originalPayload.categoryPicture['fileExtension'];
+						regMap['fileName']='categoryPicture';
+					payload = regMap;]]>
+				</expression-component>
+				<vm:outbound-endpoint exchange-pattern="one-way"
+					connector-ref="File_VM" path="save.file" doc:name="VM" />
+				<expression-component doc:name="Expression">
+					<![CDATA[responseMap=new java.util.HashMap();
+						responseMap['categoryName']=originalPayload['name'];
+						responseMap['subCategory']=originalPayload['subCategory'];
+						responseMap['description']=originalPayload['description'];
+						responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('PROCESSED');			
+					payload = responseMap;]]>
+				</expression-component>
+				<logger level="INFO"
+					message="[REGISTER CATEGORY SUCCESS #[originalPayload['msisdn']] : #[payload]]"
+					doc:name="Logger" />
+			</when>
+			<otherwise>
+				<expression-component doc:name="Expression">
+					<![CDATA[
+						responseMap = new java.util.HashMap();
+						responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('DUPLICATE_TRANSACTION');			
+					payload = responseMap;]]>
+				</expression-component>
+				<logger level="INFO"
+					message="[REGISTER CATEGORY FAILED #[originalPayload['msisdn']] : #[payload]]"
+					doc:name="Logger" />
+			</otherwise>
+		</choice>
+		<flow-ref name="responseHandlerFlow" doc:name="Flow Reference" />
+	</flow>
+</mule>

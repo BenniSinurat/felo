@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:vm="http://www.mulesoft.org/schema/mule/vm"
+	xmlns:mulerequester="http://www.mulesoft.org/schema/mule/mulerequester"
+	xmlns:file="http://www.mulesoft.org/schema/mule/file" xmlns:json="http://www.mulesoft.org/schema/mule/json"
+	xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd http://www.mulesoft.org/schema/mule/mulerequester http://www.mulesoft.org/schema/mule/mulerequester/current/mule-mulerequester.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd">
+
+	<flow name="communityDetailBPFlow">
+		<db:select config-ref="MySQL_Configuration" doc:name="Database">
+			<db:parameterized-query>
+	           <![CDATA[SELECT c.id, c.name, c.profile_picture, c.background_picture, c.description, c.location, c.created_date, c.private, c.email, c.username,
+	            	(SELECT COUNT(*) FROM felo.member_community mc WHERE c.id=mc.community_id) as members,
+	            	(SELECT EXISTS (SELECT 1/0 FROM felo.member_community WHERE member_id=(SELECT id FROM felo.members WHERE msisdn=#[originalPayload['msisdn']]) AND community_id=#[originalPayload['communityID']])) as isExists,
+	            	(SELECT EXISTS (SELECT 1/0 FROM felo.member_community WHERE member_id=(SELECT id FROM felo.members WHERE msisdn=#[originalPayload['msisdn']]) AND community_id=#[originalPayload['communityID']] AND admin='1')) as isAdmin
+		            	FROM felo.communities c 
+		            	WHERE c.id=#[originalPayload['communityID']]]]>
+			</db:parameterized-query>
+		</db:select>
+		<logger level="INFO" message="PAYLOAD DB = #[payload]"
+			doc:name="Logger" />
+		<message-filter onUnaccepted="dataNotFoundFlow"
+			doc:name="Message">
+			<expression-filter expression="#[payload != []]" />
+		</message-filter>
+		<set-variable variableName="name" value="#[payload.get(0)['name']]" />
+		<set-variable variableName="id"
+			value="#[new String(payload.get(0)['id'])]" doc:name="Variable" />
+		<set-variable variableName="location"
+			value="#[payload.get(0)['location']]" doc:name="Variable" />
+		<set-variable variableName="category"
+			value="#[payload.get(0)['category']]" doc:name="Variable" />
+		<set-variable variableName="createdDate"
+			value="#[org.felo.api.process.Utils.formatDate(payload.get(0)['created_date'])]"
+			doc:name="Variable" />
+		<set-variable variableName="description"
+			value="#[payload.get(0)['description']]" doc:name="Variable" />
+		<set-variable variableName="private" value="#[payload.get(0)['private']]"
+			doc:name="Variable" />
+		<set-variable variableName="members"
+			value="#[new String(payload.get(0)['members'])]" doc:name="Variable" />
+		<set-variable variableName="email" value="#[payload.get(0)['email']]"
+			doc:name="Variable" />
+		<set-variable variableName="username"
+			value="#[payload.get(0)['username']]" doc:name="Variable" />
+		<set-variable variableName="profPic"
+			value="#[payload.get(0)['profile_picture']]" doc:name="Variable" />
+		<set-variable variableName="backPic"
+			value="#[payload.get(0)['background_picture']]" doc:name="Variable" />
+		<set-variable variableName="isexists"
+			value="#[payload.get(0)['isExists']]" doc:name="Variable" />
+		<set-variable variableName="isAdmin" value="#[payload.get(0)['isAdmin']]"
+			doc:name="Variable" />
+
+		<choice>
+			<when expression="#[flowVars['isexists'] == 1]">
+				<db:select config-ref="MySQL_Configuration" doc:name="Database">
+					<db:parameterized-query>
+		            	<![CDATA[SELECT member_id, community_id, approved, admin from felo.member_community
+		                    WHERE member_id=(SELECT id FROM felo.members WHERE msisdn=#[originalPayload['msisdn']])
+		                            AND community_id=#[originalPayload['communityID']]]]>
+		            </db:parameterized-query>
+				</db:select>
+				<logger level="INFO" message="PAYLOAD DB = #[payload]"
+					doc:name="Logger" />
+				<message-filter onUnaccepted="dataNotFoundFlow"
+					doc:name="Message">
+					<expression-filter expression="#[payload != []]" />
+				</message-filter>
+
+				<choice>
+					<when>
+						<and-filter>
+							<expression-filter expression="#[flowVars['private'] == true]" />
+							<expression-filter expression="#[payload.get(0)['approved'] == 1]" />
+							<expression-filter expression="#[payload.get(0)['admin'] == 0]" />
+						</and-filter>
+						<set-variable value="REQUESTED" variableName="statusJoin" />
+					</when>
+					<otherwise>
+						<set-variable value="APPROVED" variableName="statusJoin" />
+					</otherwise>
+				</choice>
+			</when>
+			<otherwise>
+				<set-variable value="notJoin" variableName="statusJoin" />
+			</otherwise>
+		</choice>
+
+		<choice>
+			<when expression="#[flowVars['isAdmin'] == 1]">
+				<set-variable value="yes" variableName="isadmin" />
+			</when>
+			<otherwise>
+				<set-variable value="no" variableName="isadmin" />
+			</otherwise>
+		</choice>
+
+		<expression-component doc:name="Expression">
+			<![CDATA[responseMap=new java.util.HashMap();
+				responseMap['profilePicture']=flowVars['profPic'];
+				responseMap['backgroundPicture']=flowVars['backPic'];
+				responseMap['name']=flowVars['name'];
+				responseMap['location']=flowVars['location'];
+				responseMap['category']=flowVars['category'];
+				responseMap['createdDate']=flowVars['createdDate'];
+				responseMap['description']=flowVars['description'];
+				responseMap['private']=flowVars['private'];
+				responseMap['id']=flowVars['id'];
+				responseMap['members']=flowVars['members'];
+				responseMap['email']=flowVars['email'];
+				responseMap['username']=flowVars['username'];
+				responseMap['msisdn']=originalPayload['msisdn'];
+				responseMap['isJoin']=flowVars['statusJoin'];
+				responseMap['isAdmin']=flowVars['isadmin'];
+				responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('PROCESSED');			
+			payload = responseMap;]]>
+		</expression-component>
+	</flow>
+
+</mule>
