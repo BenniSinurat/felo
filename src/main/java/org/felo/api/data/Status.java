@@ -39,7 +39,8 @@ public enum Status {
 	INVALID_OTP("400"),
 	DUPLICATE_COMMUNITY("409"),
 	PIN_ERROR("400"),
-	FAILED("400");
+	FAILED("400"),
+	OTP_VALIDATION_FAILED("400");
 	
 	private String httpStatusCode;
 	

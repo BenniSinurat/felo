@@ -82,13 +82,20 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 		<flow-ref name="responseHandlerFlow" doc:name="Flow Reference" />
 	</flow>
 	<sub-flow name="confirmMemberPayment">
+		<expression-component doc:name="Expression">
+			<![CDATA[responseMap=new java.util.HashMap();
+				responseMap['token']=flowVars['tokenAPI'];
+				responseMap['requestID']=originalPayload['requestID'];
+				responseMap['otp']=originalPayload['otp'];
+			payload = responseMap;]]>
+		</expression-component>
 		<http:request config-ref="HTTP_Request_Configuration"
-			path="Emoney/Member/ConfirmMemberPayment" method="POST" doc:name="HTTP">
+			path="Emoney/ConfirmPayment" method="POST" doc:name="HTTP">
 			<http:request-builder>
 				<http:header headerName="Content-Type"
 					value="application/x-www-form-urlencoded" />
 				<http:header headerName="APIKey" value="${api.key}" />
-				<http:header value="#[originalPayload['requestAuth']]"
+				<http:header value=""
 					headerName="requestAuth" />
 				<http:query-param paramName="otp"
 					value="#[originalPayload['otp']]" />

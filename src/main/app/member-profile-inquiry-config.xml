@@ -86,6 +86,7 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 			<![CDATA[responseMap=new java.util.HashMap();
 				responseMap['msisdn']=originalPayload['msisdn'];
 				responseMap['name']=originalPayload['name'];
+				responseMap['profilePicture']=flowVars['urlProfPic'];
 				responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('PROCESSED');		
 			payload = responseMap;]]>
 		</expression-component>

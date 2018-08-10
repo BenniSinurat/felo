@@ -64,7 +64,7 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 			<otherwise>
 				<processor-chain doc:name="Processor Chain">
 					<logger level="INFO"
-						message="[BALANCE-INQ FAILED #[originalPayload['msisdn']] : #[payload]]"
+						message="[BALANCE-INQ Response #[originalPayload['msisdn']] : #[payload]]"
 						doc:name="Logger" />
 				</processor-chain>
 			</otherwise>

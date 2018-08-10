@@ -37,103 +37,192 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 				<logger level="INFO" message="Token API != null" />
 			</otherwise>
 		</choice>
-		<set-variable variableName="expiredHour"
-			value="#[org.felo.api.process.Utils.getTotalHour(originalPayload['startDate'], originalPayload['endDate'])]"
-			doc:name="Variable" />
-		<set-variable
-			value="/amount=#[originalPayload['amount']]/description=#[originalPayload['description']]/eventName=#[originalPayload['eventName']]/expiredAtHour=#[flowVars['expiredHour']]/token=#[flowVars['tokenAPI']]"
-			variableName="requestAuthContent" />
-		<expression-transformer
-			expression="#[originalPayload['requestAuthContent']=requestAuthContent;originalPayload]"
-			doc:name="Expression" />
-		<flow-ref name="generateHash" />
-		<flow-ref name="createEvent" />
-		<choice doc:name="Choice">
-			<when expression="#[flowVars['status'] == 'SESSION_EXPIRED']">
-				<processor-chain doc:name="Processor Chain">
-					<flow-ref name="loginPartnerFlow" doc:name="Flow Reference" />
-					<choice doc:name="Choice">
-						<when expression="#[payload.status.message == 'PROCESSED']">
-							<flow-ref name="createEvent" doc:name="Flow Reference" />
-							<choice>
-								<when expression="#[flowVars['status'] == 'PROCESSED']">
-									<set-variable variableName="ticketID"
-										value="#[payload.EventResponse.ticketID]" />
-									<set-variable variableName="paymentURL"
-										value="#[payload.EventResponse.paymentURL]" />
-									<set-variable variableName="eventPic"
-										value="#[flowVars['ticketID']]-eventPicture" doc:name="Variable" />
-									<set-variable variableName="urlEventPic"
-										value="${url.file}event/#[flowVars['eventPic']].#[originalPayload.eventPicture['fileExtension']]"
-										doc:name="Variable" />
-									<db:insert config-ref="MySQL_Configuration" doc:name="Database">
-										<db:parameterized-query>
-								            <![CDATA[INSERT INTO felo.events (ticket_id,member_id,community_id,location,picture) 
-												SELECT * FROM (SELECT #[flowVars['ticketID']],(SELECT m.id from felo.members m INNER JOIN felo.member_community mc ON mc.member_id=m.id 
-																WHERE mc.community_id=#[originalPayload['communityID']] 
-																AND m.msisdn=#[originalPayload['msisdn']] 
-																AND mc.approved='1'),#[originalPayload['communityID']],#[originalPayload['location']],#[flowVars['urlEventPic']]) as tmp
-												WHERE NOT EXISTS (
-													SELECT ticket_id FROM felo.events
-														WHERE ticket_id=#[flowVars['ticketID']]
-												)]]>
-								        </db:parameterized-query>
-									</db:insert>
-									<message-filter onUnaccepted="dbFailedFlow"
-										doc:name="Message">
-										<expression-filter expression="#[payload == 1]" />
-									</message-filter>
-									<expression-component doc:name="Expression">
-										<![CDATA[regMap=new java.util.HashMap();
-											regMap['path']='event';
-											regMap['content']=originalPayload.eventPicture['content'];
-											regMap['fileExtension']=originalPayload.eventPicture['fileExtension'];
-											regMap['fileName']=flowVars['eventPic'];
-										payload = regMap;]]>
-									</expression-component>
-									<vm:outbound-endpoint exchange-pattern="one-way"
-										connector-ref="File_VM" path="save.file" doc:name="VM" />
-									<expression-component doc:name="Expression">
-										<![CDATA[responseMap=new java.util.HashMap();
-											responseMap['msisdn']=originalPayload['msisdn'];
-											responseMap['communityID']=originalPayload['communityID'];
-											responseMap['eventName']=originalPayload['eventName'];
-											responseMap['location']=originalPayload['location'];
-											responseMap['description']=originalPayload['description'];
-											responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('PROCESSED');		
-										payload = responseMap;]]>
-									</expression-component>
-									<logger level="INFO"
-										message="[CREATE EVENT SUCCESS #[originalPayload['msisdn']] : #[payload]]"
-										doc:name="Logger" />
+		<db:select config-ref="MySQL_Configuration" doc:name="Database">
+			<db:parameterized-query>
+            	<![CDATA[SELECT admin from felo.member_community
+		                    WHERE member_id=(SELECT id FROM felo.members WHERE msisdn=#[originalPayload['msisdn']])
+		                            AND community_id=#[originalPayload['communityID']]]]>
+			</db:parameterized-query>
+		</db:select>
+		<message-filter onUnaccepted="dbFailedFlow" doc:name="Message">
+			<expression-filter expression="#[payload != []]" />
+		</message-filter>
+		<set-variable value="#[payload.get(0)['admin']]"
+			variableName="isAdmin" doc:name="Variable" />
+		<choice>
+			<when expression="#[flowVars['isAdmin'] == 1]">
+				<set-variable variableName="expiredHour" value="#[org.felo.api.process.Utils.expiredDate(originalPayload['endDate'])]" doc:name="Variable" />
+				<set-variable
+					value="/amount=#[originalPayload['amount']]/description=#[originalPayload['description']]/eventName=#[originalPayload['eventName']]/expiredAtHour=#[flowVars['expiredHour']]/token=#[flowVars['tokenAPI']]"
+					variableName="requestAuthContent" />
+				<expression-transformer
+					expression="#[originalPayload['requestAuthContent']=requestAuthContent;originalPayload]"
+					doc:name="Expression" />
+
+				<flow-ref name="generateHash" />
+				<flow-ref name="createEvent" />
+				<choice doc:name="Choice">
+					<when expression="#[flowVars['status'] == 'SESSION_EXPIRED']">
+						<processor-chain doc:name="Processor Chain">
+							<flow-ref name="loginPartnerFlow" doc:name="Flow Reference" />
+							<choice doc:name="Choice">
+								<when expression="#[payload.status.message == 'PROCESSED']">
+									<flow-ref name="createEvent" doc:name="Flow Reference" />
+									<choice>
+										<when expression="#[flowVars['status'] == 'PROCESSED']">
+											<set-variable variableName="ticketID"
+												value="#[payload.EventResponse[0].ticketID]" />
+											<set-variable variableName="paymentURL"
+												value="#[payload.EventResponse[0].paymentURL]" />
+											<set-variable variableName="eventPic"
+												value="#[flowVars['ticketID']]-eventPicture" doc:name="Variable" />
+											<set-variable variableName="urlEventPic"
+												value="${url.file}event/#[flowVars['eventPic']].#[originalPayload.eventPicture['fileExtension']]"
+												doc:name="Variable" />
+											<db:insert config-ref="MySQL_Configuration">
+												<db:parameterized-query>
+										            <![CDATA[INSERT INTO felo.events (ticket_id,member_id,community_id,location,picture,event_name) 
+														SELECT * FROM (SELECT #[flowVars['ticketID']],(SELECT m.id from felo.members m INNER JOIN felo.member_community mc ON mc.member_id=m.id 
+																		WHERE mc.community_id=#[originalPayload['communityID']] 
+																		AND m.msisdn=#[originalPayload['msisdn']] 
+																		AND mc.approved='1'),#[originalPayload['communityID']],#[originalPayload['location']],#[flowVars['urlEventPic']],#[originalPayload['eventName']]) as tmp
+														WHERE NOT EXISTS (
+															SELECT ticket_id FROM felo.events
+																WHERE ticket_id=#[flowVars['ticketID']]
+														)]]>
+										        </db:parameterized-query>
+											</db:insert>
+											<message-filter onUnaccepted="dbFailedFlow"
+												doc:name="Message">
+												<expression-filter expression="#[payload == 1]" />
+											</message-filter>
+											<expression-component doc:name="Expression">
+												<![CDATA[regMap=new java.util.HashMap();
+													regMap['path']='event';
+													regMap['content']=originalPayload.eventPicture['content'];
+													regMap['fileExtension']=originalPayload.eventPicture['fileExtension'];
+													regMap['fileName']=flowVars['eventPic'];
+												payload = regMap;]]>
+											</expression-component>
+											<vm:outbound-endpoint exchange-pattern="one-way"
+												connector-ref="File_VM" path="save.file" doc:name="VM" />
+											<expression-component doc:name="Expression">
+												<![CDATA[responseMap=new java.util.HashMap();
+													responseMap['msisdn']=originalPayload['msisdn'];
+													responseMap['communityID']=originalPayload['communityID'];
+													responseMap['eventName']=originalPayload['eventName'];
+													responseMap['location']=originalPayload['location'];
+													responseMap['description']=originalPayload['description'];
+													responseMap['paymentURL']=flowVars['paymentURL'];
+													responseMap['ticketID']=flowVars['ticketID'];
+													responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('PROCESSED');		
+												payload = responseMap;]]>
+											</expression-component>
+											<logger level="INFO"
+												message="[CREATE EVENT SUCCESS #[originalPayload['msisdn']] : #[payload]]"
+												doc:name="Logger" />
+										</when>
+										<otherwise>
+											<logger level="INFO"
+												message="[CREATE EVENT FAILED #[originalPayload['msisdn']] : #[payload]]"
+												doc:name="Logger" />
+										</otherwise>
+									</choice>
 								</when>
 								<otherwise>
 									<logger level="INFO"
-										message="[CREATE EVENT FAILED #[originalPayload['msisdn']] : #[payload]]"
+										message="[LOGIN PARTNER FAILED #[originalPayload['msisdn']] : #[payload]]"
 										doc:name="Logger" />
 								</otherwise>
 							</choice>
-						</when>
-						<otherwise>
+						</processor-chain>
+					</when>
+					<when expression="#[flowVars['status'] == 'PROCESSED']">
+						<set-variable variableName="ticketID"
+							value="#[payload.EventResponse[0].ticketID]" />
+						<set-variable variableName="paymentURL"
+							value="#[payload.EventResponse[0].paymentURL]" />
+						<set-variable variableName="eventPic"
+							value="#[flowVars['ticketID']]-eventPicture" doc:name="Variable" />
+						<set-variable variableName="urlEventPic"
+							value="${url.file}event/#[flowVars['eventPic']].#[originalPayload.eventPicture['fileExtension']]"
+							doc:name="Variable" />
+						<db:insert config-ref="MySQL_Configuration" doc:name="Database">
+							<db:parameterized-query>
+								<![CDATA[INSERT INTO felo.events (ticket_id,member_id,community_id,location,picture,event_name) 
+										SELECT * FROM (SELECT #[flowVars['ticketID']],(SELECT m.id from felo.members m INNER JOIN felo.member_community mc ON mc.member_id=m.id 
+											WHERE mc.community_id=#[originalPayload['communityID']] 
+												AND m.msisdn=#[originalPayload['msisdn']] 
+												AND mc.admin='1'),#[originalPayload['communityID']],#[originalPayload['location']],#[flowVars['urlEventPic']],#[originalPayload['eventName']]) as tmp
+											WHERE NOT EXISTS (
+												SELECT ticket_id FROM felo.events
+														WHERE ticket_id=#[flowVars['ticketID']]
+											)]]>
+							</db:parameterized-query>
+						</db:insert>
+						<message-filter onUnaccepted="dbFailedFlow"
+							doc:name="Message">
+							<expression-filter expression="#[payload == 1]" />
+						</message-filter>
+						<expression-component doc:name="Expression">
+							<![CDATA[regMap=new java.util.HashMap();
+								regMap['path']='event';
+								regMap['content']=originalPayload.eventPicture['content'];
+								regMap['fileExtension']=originalPayload.eventPicture['fileExtension'];
+								regMap['fileName']=flowVars['eventPic'];
+							payload = regMap;]]>
+						</expression-component>
+						<vm:outbound-endpoint exchange-pattern="one-way"
+							connector-ref="File_VM" path="save.file" doc:name="VM" />
+						<expression-component doc:name="Expression">
+							<![CDATA[responseMap=new java.util.HashMap();
+								responseMap['msisdn']=originalPayload['msisdn'];
+								responseMap['communityID']=originalPayload['communityID'];
+								responseMap['eventName']=originalPayload['eventName'];
+								responseMap['location']=originalPayload['location'];
+								responseMap['description']=originalPayload['description'];
+								responseMap['paymentURL']=flowVars['paymentURL'];
+								responseMap['ticketID']=flowVars['ticketID'];
+								responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('PROCESSED');		
+							payload = responseMap;]]>
+						</expression-component>
+					</when>
+					<otherwise>
+						<processor-chain doc:name="Processor Chain">
 							<logger level="INFO"
-								message="[LOGIN PARTNER FAILED #[originalPayload['msisdn']] : #[payload]]"
+								message="[CREATE EVENT FAILED #[originalPayload['msisdn']] : #[payload]]"
 								doc:name="Logger" />
-						</otherwise>
-					</choice>
-				</processor-chain>
+						</processor-chain>
+					</otherwise>
+				</choice>
 			</when>
 			<otherwise>
-				<processor-chain doc:name="Processor Chain">
-					<logger level="INFO"
-						message="[CREATE EVENT FAILED #[originalPayload['msisdn']] : #[payload]]"
-						doc:name="Logger" />
-				</processor-chain>
+				<expression-component doc:name="Expression">
+					<![CDATA[responseMap=new java.util.HashMap();
+						responseMap['msisdn']=originalPayload['msisdn'];
+						responseMap['eventName']=originalPayload['eventName'];
+						responseMap['communityID']=originalPayload['communityID'];
+						responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('UNAUTHORIZED_ACCESS');			
+					payload = responseMap;]]>
+				</expression-component>
+				<logger level="INFO"
+					message="[CREARE EVENT FAILED #[originalPayload['msisdn']] : #[payload]]"
+					doc:name="Logger" />
 			</otherwise>
 		</choice>
 		<flow-ref name="responseHandlerFlow" doc:name="Flow Reference" />
 	</flow>
 
 	<sub-flow name="createEvent">
+		<expression-component doc:name="Expression">
+			<![CDATA[responseMap=new java.util.HashMap();
+				responseMap['eventName']=originalPayload['eventName'];
+				responseMap['token']=flowVars['tokenAPI'];
+				responseMap['amount']=originalPayload['amount'];
+				responseMap['expiredAtHour']=flowVars['expiredHour'];
+				responseMap['description']=originalPayload['description'];	
+			payload = responseMap;]]>
+		</expression-component>
 		<http:request config-ref="HTTP_Request_Configuration"
 			path="PaymentCollection/Event" method="POST" doc:name="HTTP">
 			<http:request-builder>
@@ -153,10 +242,10 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 					value="#[flowVars['expiredHour']]" />
 			</http:request-builder>
 			<http:success-status-code-validator
-				values="200,400,401,403,404,440,444,500" />
+				values="200,400,401,403,404,409,440,444,498,500,503,504,598,599" />
 		</http:request>
 		<json:json-to-object-transformer
-			returnClass="java.lang.Object" doc:name="JSON to Object" />
+			returnClass="java.lang.Object" doc:name="JSON to Object" /> 
 		<set-variable value="#[payload.status.message]"
 			variableName="status" doc:name="Variable" />
 	</sub-flow>

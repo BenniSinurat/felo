@@ -14,37 +14,49 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 			<when expression="#[originalPayload['eventPicture'] == '']">
 				<db:update config-ref="MySQL_Configuration" doc:name="Database">
 					<db:parameterized-query>
-		            	<![CDATA[UPDATE events e INNER JOIN event_details ed ON e.id=ed.event_id 
-		            					SET ed.start_date=#[originalPayload['startDate']],
-		            						ed.end_date=#[originalPayload['endDate']],
-		            						e.name=#[originalPayload['name']],
-		            						ed.location=#[originalPayload['location']],
-		            						ed.agenda=#[originalPayload['agenda']],
-		            						ed.action=#[originalPayload['action']]
-		            			WHERE e.id=#[flowVars['eventID']]]]>
+		            	<![CDATA[UPDATE felo.events 
+		            					SET event_name=#[originalPayload['name']],
+		            						location=#[originalPayload['location']]
+		            			WHERE id=#[originalPayload['eventID']]]]>
 					</db:parameterized-query>
 				</db:update>
+				<logger level="INFO" message="FROM DB = #[payload]" />
+				<message-filter onUnaccepted="dbFailedFlow" doc:name="Message">
+					<expression-filter expression="#[payload == 1]" />
+				</message-filter>
 			</when>
 			<otherwise>
+				<set-variable variableName="eventPic"
+					value="#[flowVars['ticketID']]-eventPicture" doc:name="Variable" />
+				<set-variable variableName="urlEventPic"
+					value="${url.file}event/#[flowVars['eventPic']].#[originalPayload.eventPicture['fileExtension']]"
+					doc:name="Variable" />
 				<db:update config-ref="MySQL_Configuration" doc:name="Database">
 					<db:parameterized-query>
-		            	<![CDATA[UPDATE events e INNER JOIN event_details ed ON e.id=ed.event_id 
-		            					SET ed.start_date=#[originalPayload['startDate']],
-		            						ed.end_date=#[originalPayload['endDate']],
-		            						e.name=#[originalPayload['name']],
-		            						ed.event_picture=#[flowVars['eventPic']],
-		            						ed.location=#[originalPayload['location']],
-		            						ed.agenda=#[originalPayload['agenda']],
-		            						ed.action=#[originalPayload['action']]
-		            			WHERE e.id=#[flowVars['eventID']]]]>
+		            	<![CDATA[UPDATE felo.events
+		            					SET event_name=#[originalPayload['name']],
+		            						picture=#[flowVars['urlEventPic']],
+		            						location=#[originalPayload['location']]
+		            			WHERE id=#[originalPayload['eventID']]]]>
 					</db:parameterized-query>
 				</db:update>
+				<logger level="INFO" message="FROM DB = #[payload]" />
+				<message-filter onUnaccepted="dbFailedFlow" doc:name="Message">
+					<expression-filter expression="#[payload == 1]" />
+				</message-filter>
+				<expression-component doc:name="Expression">
+					<![CDATA[regMap=new java.util.HashMap();
+							regMap['path']='event';
+							regMap['content']=originalPayload.eventPicture['content'];
+							regMap['fileExtension']=originalPayload.eventPicture['fileExtension'];
+							regMap['fileName']=flowVars['eventPic'];
+					payload = regMap;]]>
+				</expression-component>
+				<vm:outbound-endpoint exchange-pattern="one-way"
+					connector-ref="File_VM" path="save.file" doc:name="VM" />
 			</otherwise>
 		</choice>
-		<logger level="INFO" message="FROM DB = #[payload]" />
-		<message-filter onUnaccepted="dbFailedFlow" doc:name="Message">
-			<expression-filter expression="#[payload == 1]" />
-		</message-filter>
+
 		<expression-component doc:name="Expression">
 			<![CDATA[responseMap=new java.util.HashMap();
 				responseMap['eventName']=originalPayload['name'];

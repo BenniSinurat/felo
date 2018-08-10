@@ -12,24 +12,53 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 	<flow name="deleteCommunityBPFlow">
 		<set-payload value="#[flowVars['originalPayload']]"
 			doc:name="Set Payload" />
-		<db:delete config-ref="MySQL_Configuration" doc:name="Database">
+		<db:select config-ref="MySQL_Configuration" doc:name="Database">
 			<db:parameterized-query>
-		        <![CDATA[DELETE FROM communities WHERE id=#[originalPayload['communityID']]]]>
+            	<![CDATA[SELECT admin from felo.member_community
+		                    WHERE member_id=(SELECT id FROM felo.members WHERE msisdn=#[originalPayload['msisdn']])
+		                            AND community_id=#[originalPayload['communityID']]]]>
 			</db:parameterized-query>
-		</db:delete>
+		</db:select>
 		<message-filter onUnaccepted="dbFailedFlow" doc:name="Message">
-			<expression-filter expression="#[payload == 1]" />
+			<expression-filter expression="#[payload != []]" />
 		</message-filter>
-		<expression-component doc:name="Expression">
-			<![CDATA[responseMap=new java.util.HashMap();
-				responseMap['communityID']=originalPayload['communityID'];
-				responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('PROCESSED');			
-			payload = responseMap;]]>
-		</expression-component>
+		<set-variable value="#[payload.get(0)['admin']]"
+			variableName="isAdmin" doc:name="Variable" />
+		<choice>
+			<when expression="#[flowVars['isAdmin'] == 1]">
+				<db:delete config-ref="MySQL_Configuration" doc:name="Database">
+					<db:parameterized-query>
+			       		<![CDATA[DELETE FROM communities WHERE id=#[originalPayload['communityID']]]]>
+					</db:parameterized-query>
+				</db:delete>
+				<message-filter onUnaccepted="dbFailedFlow" doc:name="Message">
+					<expression-filter expression="#[payload == 1]" />
+				</message-filter>
+				<expression-component doc:name="Expression">
+					<![CDATA[responseMap=new java.util.HashMap();
+						responseMap['communityID']=originalPayload['communityID'];
+						responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('PROCESSED');			
+					payload = responseMap;]]>
+				</expression-component>
 
-		<logger level="INFO"
-			message="[DELETE COMMUNITY SUCCESS #[originalPayload['msisdn']] : #[payload]]"
-			doc:name="Logger" />
-		<flow-ref name="responseHandlerFlow" doc:name="Flow Reference" />
+				<logger level="INFO"
+					message="[DELETE COMMUNITY SUCCESS #[originalPayload['msisdn']] : #[payload]]"
+					doc:name="Logger" />
+				<flow-ref name="responseHandlerFlow" doc:name="Flow Reference" />
+			</when>
+			<otherwise>
+				<expression-component doc:name="Expression">
+					<![CDATA[responseMap=new java.util.HashMap();
+						responseMap['msisdn']=originalPayload['msisdn'];
+						responseMap['memberRequest']=originalPayload['memberRequest'];
+						responseMap['communityID']=originalPayload['communityID'];
+						responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('UNAUTHORIZED_ACCESS');			
+					payload = responseMap;]]>
+				</expression-component>
+				<logger level="INFO"
+					message="[DELETE COMMUNITY FAILED #[originalPayload['msisdn']] : #[payload]]"
+					doc:name="Logger" />
+			</otherwise>
+		</choice>
 	</flow>
 </mule>

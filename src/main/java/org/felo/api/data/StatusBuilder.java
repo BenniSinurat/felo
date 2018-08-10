@@ -80,35 +80,27 @@ public abstract class StatusBuilder {
 			return new ResponseStatus("V14", "PAYMENT_CODE_NOT_FOUND",
 					"The specified Payment Code already expired or not found");
 		case SUCCESS:
-			return new ResponseStatus("TO00", "SUCCESS",
-					"Success");
+			return new ResponseStatus("TO00", "SUCCESS", "Success");
 		case TOKEN_EXPIRED:
-			return new ResponseStatus("TO01", "TOKEN_EXPIRED",
-					"Token Expired");
+			return new ResponseStatus("TO01", "TOKEN_EXPIRED", "Token Expired");
 		case ACCESS_VIOLATION:
-			return new ResponseStatus("TO02", "ACCESS_VIOLATION",
-					"Access Violation");
+			return new ResponseStatus("TO02", "ACCESS_VIOLATION", "Access Violation");
 		case NOT_FOUND:
-			return new ResponseStatus("TO03", "NOT_FOUND",
-					"Data not found");
+			return new ResponseStatus("TO03", "NOT_FOUND", "Data not found");
 		case NO_TRANSACTION:
-			return new ResponseStatus("S84", "NO_TRANSACTION",
-					"No transaction found for the specified account");
+			return new ResponseStatus("S84", "NO_TRANSACTION", "No transaction found for the specified account");
 		case INVALID_OTP:
-			return new ResponseStatus("T004", "INVALID_OTP",
-					"Invalid OTP");
+			return new ResponseStatus("T004", "INVALID_OTP", "Invalid OTP");
 		case DUPLICATE_COMMUNITY:
-			return new ResponseStatus("T004", "DUPLICATE_COMMUNITY",
-					"Community name has been registered");
+			return new ResponseStatus("T004", "DUPLICATE_COMMUNITY", "Community name has been registered");
 		case UNKNOWN_ERROR:
-			return new ResponseStatus("E99", "UNKNOWN_ERROR",
-					"Unknown Error");
+			return new ResponseStatus("E99", "UNKNOWN_ERROR", "Unknown Error");
 		case PIN_ERROR:
-			return new ResponseStatus("A14", "PIN_ERROR",
-					"PIN Error");
+			return new ResponseStatus("A14", "PIN_ERROR", "PIN Error");
 		case FAILED:
-			return new ResponseStatus("E99", "FAILED",
-					"Failed");
+			return new ResponseStatus("E99", "FAILED", "Failed");
+		case OTP_VALIDATION_FAILED:
+			return new ResponseStatus("T005", "OTP_VALIDATION_FAILED", "OTP Validation Failed");
 		default:
 			return new ResponseStatus("E99", "GENERAL_ERROR", "General Error");
 		}

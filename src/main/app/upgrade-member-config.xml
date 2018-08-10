@@ -92,7 +92,7 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 					value="#[originalPayload['idCardNo']]" />
 			</http:request-builder>
 			<http:success-status-code-validator
-				values="200,400,401,403,404,440,500" />
+				values="200,400,401,403,404,409,440,444,498,500,503,504,598,599" />
 		</http:request>
 		<json:json-to-object-transformer
 			returnClass="java.lang.Object" doc:name="JSON to Object" />

@@ -35,7 +35,7 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 			</otherwise>
 		</choice>
 		<set-variable
-			value="/amount=#[originalPayload['amount']]/fromMember=#[originalPayload['msisdn']]/token=#[flowVars['tokenAPI']]/toMember=#[originalPayload['toMember']]/traceNumber=#[originalPayload['traceNumber']]"
+			value="/amount=#[originalPayload['amount']]/fromMember=#[originalPayload['msisdn']]/toMember=#[originalPayload['toMember']]/token=#[flowVars['tokenAPI']]/traceNumber=#[originalPayload['traceNumber']]"
 			variableName="requestAuthContent" />
 		<expression-transformer
 			expression="#[originalPayload['requestAuthContent']=requestAuthContent;originalPayload]"
@@ -72,24 +72,33 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 		<flow-ref name="responseHandlerFlow" doc:name="Flow Reference" />
 	</flow>
 	<sub-flow name="requestMemberPayment">
+		<expression-component doc:name="Expression">
+			<![CDATA[responseMap=new java.util.HashMap();
+				responseMap['toMember']=originalPayload['toMember'];
+				responseMap['token']=flowVars['tokenAPI'];
+				responseMap['amount']=originalPayload['amount'];
+				responseMap['fromMember']=originalPayload['msisdn'];
+				responseMap['traceNumber']=originalPayload['traceNumber'];	
+			payload = responseMap;]]>
+		</expression-component>
 		<http:request config-ref="HTTP_Request_Configuration"
-			path="Emoney/Member/RequestPayment" method="POST" doc:name="HTTP">
+			path="Emoney/RequestPayment" method="POST" doc:name="HTTP">
 			<http:request-builder>
 				<http:header headerName="Content-Type"
 					value="application/x-www-form-urlencoded" />
 				<http:header headerName="APIKey" value="${api.key}" />
 				<http:header value="#[originalPayload['requestAuth']]"
 					headerName="requestAuth" />
-				<http:query-param paramName="amount" 
-					value="#[originalPayload['amount']]"/>
+				<http:query-param paramName="amount"
+					value="#[originalPayload['amount']]" />
 				<http:query-param paramName="fromMember"
 					value="#[originalPayload['msisdn']]" />
 				<http:query-param paramName="token"
 					value="#[flowVars['tokenAPI']]" />
 				<http:query-param paramName="toMember"
-					value="#[originalPayload['toMember']]"/>
+					value="#[originalPayload['toMember']]" />
 				<http:query-param paramName="traceNumber"
-					value="#[originalPayload['traceNumber']]"/>
+					value="#[originalPayload['traceNumber']]" />
 			</http:request-builder>
 			<http:success-status-code-validator
 				values="200,400,401,403,404,440" />

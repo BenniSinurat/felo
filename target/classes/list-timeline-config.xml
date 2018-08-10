@@ -78,12 +78,14 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 
 			<db:select config-ref="MySQL_Configuration" doc:name="Database">
 				<db:parameterized-query>
-					   <![CDATA[SELECT t.id,t.community_id as communityID,c.name as communityName,t.description,t.file, t.created_date, c.profile_picture, t.location,
+					   <![CDATA[SELECT t.id,t.community_id as communityID,c.name as communityName,t.description,t.file, t.created_date, t.location,
 	            			(SELECT COUNT(*) FROM felo.comments WHERE timeline_id=#[flowVars['id']]) as comments,
 				            (SELECT COUNT(*) FROM felo.likes WHERE timeline_id=#[flowVars['id']]) as likes,
 				            (SELECT EXISTS (SELECT 1/0 FROM felo.likes WHERE member_id=(SELECT id FROM felo.members WHERE msisdn=#[originalPayload['msisdn']]) AND timeline_id=#[flowVars['id']])) as isLike,
 				           	(SELECT EXISTS (SELECT 1/0 FROM felo.comments WHERE member_id=(SELECT id FROM felo.members WHERE msisdn=#[originalPayload['msisdn']]) AND timeline_id=#[flowVars['id']])) as isComment,
-				           	(SELECT EXISTS (SELECT 1/0 FROM felo.timelines WHERE member_id=(SELECT id FROM felo.members WHERE msisdn=#[originalPayload['msisdn']]) AND id=#[flowVars['id']])) as isMe
+				           	(SELECT EXISTS (SELECT 1/0 FROM felo.timelines WHERE member_id=(SELECT id FROM felo.members WHERE msisdn=#[originalPayload['msisdn']]) AND id=#[flowVars['id']])) as isMe,
+				           	(SELECT name FROM felo.members WHERE id=(SELECT member_id from felo.timelines WHERE id=#[flowVars['id']])) as shareName,
+				           	(SELECT profile_picture FROM felo.members WHERE id=(SELECT member_id from felo.timelines WHERE id=#[flowVars['id']])) as profile_picture
 	            		FROM felo.timelines t 
 	            			INNER JOIN felo.communities c ON  t.community_id=c.id 
 	            			INNER JOIN felo.members m ON t.member_id=m.id 
@@ -108,6 +110,8 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 				value="#[payload.get(0)['description']]" doc:name="Variable" />
 			<set-variable variableName="location"
 				value="#[payload.get(0)['location']]" doc:name="Variable" />
+			<set-variable variableName="shareName"
+				value="#[payload.get(0)['shareName']]" doc:name="Variable" />
 			<set-variable variableName="filePic" value="#[payload.get(0)['file']]"
 				doc:name="Variable" />
 			<set-variable variableName="profPic"
@@ -176,6 +180,10 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 
 			<expression-transformer
 				expression="#[trxPayload['location']=flowVars.location;trxPayload]"
+				doc:name="Expression" />
+				
+			<expression-transformer
+				expression="#[trxPayload['shareName']=flowVars.shareName;trxPayload]"
 				doc:name="Expression" />
 
 			<expression-transformer

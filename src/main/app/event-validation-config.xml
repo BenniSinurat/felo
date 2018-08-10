@@ -11,7 +11,7 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 			doc:name="Message">
 			<and-filter doc:name="And">
 				<expression-filter expression="#[originalPayload['token'] != null]" />
-				<expression-filter expression="#[originalPayload['eventID'] != null]" />
+				<expression-filter expression="#[originalPayload['ticketID'] != null]" />
 			</and-filter>
 		</message-filter>
 
@@ -37,6 +37,8 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 				<expression-filter expression="#[originalPayload['description'] != null]" />
 				<expression-filter expression="#[originalPayload['startDate'] != null]" />
 				<expression-filter expression="#[originalPayload['endDate'] != null]" />
+				<expression-filter expression="#[originalPayload['amount'] != null]" />
+				<expression-filter expression="#[originalPayload['action'] != null]"/>
 			</and-filter>
 		</message-filter>
 
@@ -79,7 +81,7 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 			doc:name="Message">
 			<and-filter doc:name="And">
 				<expression-filter expression="#[originalPayload['token'] != null]" />
-				<expression-filter expression="#[originalPayload['eventID'] != null]" />
+				<expression-filter expression="#[originalPayload['ticketID'] != null]" />
 			</and-filter>
 		</message-filter>
 
@@ -100,6 +102,7 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 			<and-filter>
 				<expression-filter expression="#[originalPayload['token'] != null]" />
 				<expression-filter expression="#[originalPayload['eventID'] != null]" />
+				<expression-filter expression="#[originalPayload['ticketID'] != null]" />
 			</and-filter>
 		</message-filter>
 

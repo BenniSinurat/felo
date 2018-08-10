@@ -100,6 +100,96 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 		</choice>
 	</sub-flow>
 
+	<sub-flow name="loginPartnerNCFlow">
+		<expression-component doc:name="Expression">
+			<![CDATA[
+				regMap = new java.util.HashMap();
+				regMap['methodType']= 'GET';			
+				regMap['name']= 'TokenAPINCConfigMap';
+				regMap['key']= 'tokenApiNC';
+			payload = regMap;]]>
+		</expression-component>
+		<pooled-component>
+			<spring-object bean="CacheProcessor" />
+		</pooled-component>
+		<set-variable value="#[payload]" variableName="tokenAPI"
+			doc:name="Variable" />
+
+		<choice doc:name="Choice">
+			<when expression="#[payload == null]">
+				<logger level="INFO" message="TOKEN API = #[payload]"
+					doc:name="Logger" />
+			</when>
+			<otherwise>
+				<processor-chain doc:name="Processor Chain">
+					<logger level="INFO" message="TOKEN API = #[payload]"
+						doc:name="Logger" />
+					<expression-component doc:name="Expression">
+						<![CDATA[
+							regMap = new java.util.HashMap();
+							regMap['methodType']= 'DELETE';			
+							regMap['name']= 'TokenAPINCConfigMap';
+							regMap['key']= 'tokenApiNC';
+						payload = regMap;]]>
+					</expression-component>
+					<pooled-component>
+						<spring-object bean="CacheProcessor" />
+					</pooled-component>
+				</processor-chain>
+			</otherwise>
+		</choice>
+		<http:request config-ref="HTTP_Request_Configuration"
+			path="Session/Login" method="GET" doc:name="HTTP">
+			<http:request-builder>
+				<http:header headerName="Content-Type"
+					value="application/x-www-form-urlencoded" />
+				<http:header headerName="APIKey" value="${api.key}" />
+				<http:header headerName="Authorization" value="Basic MTExMjAwNDoxMjM0NTY=" />
+			</http:request-builder>
+			<http:success-status-code-validator
+				values="200,401,403,400,440,444,500" />
+		</http:request>
+		<json:json-to-object-transformer
+			returnClass="java.lang.Object" doc:name="JSON to Object" />
+
+		<choice doc:name="Choice">
+			<when expression="#[payload.status.message == 'PROCESSED']">
+				<processor-chain doc:name="Processor Chain">
+					<set-variable variableName="tokenAPI"
+						value="#[payload.LoginResponse[0].token]" doc:name="Variable" />
+					<expression-component doc:name="Expression">
+						<![CDATA[
+							regMap = new java.util.HashMap();
+							regMap['methodType']= 'PUT';			
+							regMap['name']= 'TokenAPINCConfigMap';
+							regMap['key']= 'tokenApiNC';
+							regMap['value']= flowVars['tokenAPI'];
+						payload = regMap;]]>
+					</expression-component>
+					<pooled-component>
+						<spring-object bean="CacheProcessor" />
+					</pooled-component>
+
+					<expression-transformer
+						expression="#[originalPayload['tokenAPI']=tokenAPI;originalPayload]"
+						doc:name="Expression" />
+					<flow-ref name="generateHash" doc:name="Flow Reference" />
+					<expression-component doc:name="Expression">
+						<![CDATA[
+							responseMap = new java.util.HashMap();
+							responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('PROCESSED');			
+						payload = responseMap;]]>
+					</expression-component>
+				</processor-chain>
+			</when>
+			<otherwise>
+				<processor-chain doc:name="Processor Chain">
+					<logger level="INFO" message="Status = #[payload]" doc:name="Logger" />
+				</processor-chain>
+			</otherwise>
+		</choice>
+	</sub-flow>
+
 	<sub-flow name="tokenValidationFlow">
 		<set-variable
 			value="#[org.felo.api.auth.JWTProcessor.decodeJWTHMAC256(originalPayload['token'])]"

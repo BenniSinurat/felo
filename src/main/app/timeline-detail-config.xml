@@ -13,13 +13,15 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 			doc:name="Set Payload" />
 		<db:select config-ref="MySQL_Configuration" doc:name="Database">
 			<db:parameterized-query>
-            	<![CDATA[SELECT t.id,t.community_id as communityID,c.name as communityName,t.description,t.file, t.created_date, c.profile_picture,
+            	<![CDATA[SELECT t.id,t.community_id as communityID,c.name as communityName,t.description,t.file, t.created_date,
             			(SELECT COUNT(*) FROM felo.comments WHERE timeline_id=#[originalPayload['timelineID']]) as comments,
 			            (SELECT COUNT(*) FROM felo.likes WHERE timeline_id=#[originalPayload['timelineID']]) as likes,
 			            (SELECT EXISTS (SELECT 1/0 FROM felo.likes WHERE member_id=(SELECT id FROM felo.members WHERE msisdn=#[originalPayload['msisdn']] AND timeline_id=#[originalPayload['timelineID']]))) as isLike,
 			           	(SELECT EXISTS (SELECT 1/0 FROM felo.comments WHERE member_id=(SELECT id FROM felo.members WHERE msisdn=#[originalPayload['msisdn']] AND timeline_id=#[originalPayload['timelineID']]))) as isComment,
 			           	(SELECT EXISTS (SELECT 1/0 FROM felo.timelines WHERE member_id=(SELECT id FROM felo.members WHERE msisdn=#[originalPayload['msisdn']] AND id=#[originalPayload['timelineID']]))) as isMe,
-			           	(SELECT EXISTS (SELECT 1/0 FROM felo.member_community WHERE member_id=(SELECT id FROM felo.members WHERE msisdn=#[originalPayload['msisdn']]) AND community_id=#[originalPayload['communityID']] AND admin='1')) as isAdmin
+			           	(SELECT EXISTS (SELECT 1/0 FROM felo.member_community WHERE member_id=(SELECT id FROM felo.members WHERE msisdn=#[originalPayload['msisdn']]) AND community_id=#[originalPayload['communityID']] AND admin='1')) as isAdmin,
+			           	(SELECT name FROM felo.members WHERE id=(SELECT member_id from felo.timelines WHERE id=#[originalPayload['timelineID']])) as shareName,
+			           	(SELECT profile_picture FROM felo.members WHERE id=(SELECT member_id from felo.timelines WHERE id=#[originalPayload['timelineID']])) as profPicShare
             		FROM timelines t 
             			INNER JOIN communities c ON  t.community_id=c.id 
             			INNER JOIN felo.members m ON t.member_id=m.id 
@@ -41,8 +43,12 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 			value="#[payload.get(0)['communityName']]" doc:name="Variable" />
 		<set-variable variableName="description"
 			value="#[payload.get(0)['description']]" doc:name="Variable" />
+		<set-variable variableName="shareName"
+				value="#[payload.get(0)['shareName']]" doc:name="Variable" />
 		<set-variable variableName="profPic"
 			value="#[payload.get(0)['profile_picture']]" doc:name="Variable" />
+		<set-variable variableName="shareProfPic"
+			value="#[payload.get(0)['profPicShare']]" doc:name="Variable" />
 		<set-variable variableName="file" value="#[payload.get(0)['file']]"
 			doc:name="Variable" />
 		<set-variable variableName="isLike" value="#[payload.get(0)['isLike']]"
@@ -112,6 +118,8 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 				responseMap['isAdmin']=flowVars['isadmin'];
 				responseMap['file']=flowVars['file'];
 				responseMap['profilePicture']=flowVars['profPic'];
+				responseMap['shareProfilePicture']=flowVars['shareProfPic'];
+				responseMap['shareName']=flowVars['shareName'];
 				responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('PROCESSED');			
 			payload = responseMap;]]>
 		</expression-component>

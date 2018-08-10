@@ -105,7 +105,6 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 			<and-filter>
 				<expression-filter expression="#[originalPayload['token'] != null]" />
 				<expression-filter expression="#[originalPayload['amount'] != null]" />
-				<expression-filter expression="#[originalPayload['fromMember'] != null]" />
 				<expression-filter expression="#[originalPayload['toPartner'] != null]" />
 				<expression-filter expression="#[originalPayload['traceNumber'] != null]" />
 			</and-filter>

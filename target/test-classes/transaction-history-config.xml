@@ -74,6 +74,15 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 	</flow>
 
 	<sub-flow name="trxHistory">
+		<expression-component doc:name="Expression">
+			<![CDATA[responseMap=new java.util.HashMap();
+				responseMap['token']=flowVars['tokenAPI'];
+				responseMap['fromMember']=originalPayload['msisdn'];
+				responseMap['accountID']=flowVars['accountID'];
+				responseMap['fromDate']=originalPayload['fromDate'];
+				responseMap['toDate']=originalPayload['toDate'];
+			payload = responseMap;]]>
+		</expression-component>
 		<http:request config-ref="HTTP_Request_Configuration"
 			path="Emoney/TransactionHistory" method="GET" doc:name="HTTP">
 			<http:request-builder>
@@ -88,6 +97,10 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 					value="#[flowVars['tokenAPI']]" />
 				<http:query-param paramName="accountID"
 					value="#[flowVars['accountID']]" />
+				<http:query-param paramName="fromDate"
+					value="#[originalPayload['fromDate']]" />
+				<http:query-param paramName="toDate"
+					value="#[originalPayload['toDate']]" />
 			</http:request-builder>
 			<http:success-status-code-validator
 				values="200,401,403,400,404,440" />

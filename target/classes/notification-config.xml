@@ -25,8 +25,8 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 			responseMap['from']= 'RESET PASSWORD';
 			payload = responseMap;]]>
 		</expression-component>
-		<jms:outbound-endpoint connector-ref="Active_MQ"
-			queue="notification.sms" doc:name="JMS" />
+		<!-- <jms:outbound-endpoint connector-ref="Active_MQ"
+			queue="notification.sms" doc:name="JMS" /> -->
 	</flow>
 
 	<flow name="otpRegisterMemberConfig">
@@ -46,8 +46,8 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 			responseMap['from']= 'REGISTRASI FELO';
 			payload = responseMap;]]>
 		</expression-component>
-		<jms:outbound-endpoint connector-ref="Active_MQ"
-			queue="notification.sms" doc:name="JMS" />
+		<!-- <jms:outbound-endpoint connector-ref="Active_MQ"
+			queue="notification.sms" doc:name="JMS" /> -->
 	</flow>
 
 	<flow name="loginNotificationConfigFlow">
@@ -64,8 +64,8 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 			regMap['body']= payload['name']+',\r\n Akun Felo Anda baru saja login dari perangkat baru. Anda mendapatkan email ini untuk memastikan ini memang Anda.' ;
 			payload = regMap;]]>
 		</expression-component>
-		<jms:outbound-endpoint connector-ref="Active_MQ"
-			queue="notification.email" doc:name="JMS" />
+		<!-- <jms:outbound-endpoint connector-ref="Active_MQ"
+			queue="notification.email" doc:name="JMS" /> -->
 	</flow>
 
 </mule>

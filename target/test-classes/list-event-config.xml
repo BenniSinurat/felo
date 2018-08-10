@@ -14,11 +14,9 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 			doc:name="Set Payload" />
 		<db:select config-ref="MySQL_Configuration" doc:name="Database">
 			<db:parameterized-query>
-            	<![CDATA[SELECT e.id, m.msisdn, c.id as communityID, c.name as communityName, e.name as event, ed.event_picture FROM events e 
-            		INNER JOIN event_details ed ON e.id=ed.event_id 
-            		INNER JOIN communities c ON e.community_id=c.id 
-            		INNER JOIN members m ON e.member_id=m.id 
-            		AND c.id=#[originalPayload['communityID']]]]>
+            	<![CDATA[SELECT id, ticket_id, location, event_name, picture, created_date, 
+            			 (SELECT EXISTS (SELECT 1/0 FROM felo.member_community WHERE member_id=(SELECT id FROM felo.members WHERE msisdn=#[originalPayload['msisdn']]) AND community_id=#[originalPayload['communityID']] AND admin='1')) as isAdmin
+            		 FROM felo.events WHERE community_id=#[originalPayload['communityID']]]]>
 			</db:parameterized-query>
 		</db:select>
 		<logger level="INFO" message="PAYLOAD DB = #[payload]"
@@ -35,32 +33,56 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 				doc:name="Variable" />
 			<set-variable variableName="id" value="#[payload.'id']"
 				doc:name="Variable" />
-			<set-variable variableName="communityID" value="#[payload.'communityID']"
+			<set-variable variableName="ticketID" value="#[payload.'ticket_id']"
 				doc:name="Variable" />
-			<set-variable variableName="communityName" value="#[payload.'communityName']"
+			<set-variable variableName="location" value="#[payload.'location']"
 				doc:name="Variable" />
-			<set-variable variableName="event" value="#[payload.'event']"
+			<set-variable variableName="eventName" value="#[payload.'event_name']"
 				doc:name="Variable" />
-			<set-variable variableName="eventPic" value="#[payload.'event_picture']"
+			<set-variable variableName="eventPic" value="#[payload.'picture']"
 				doc:name="Variable" />
+			<set-variable variableName="createdDate" value="#[payload.'created_date']"
+				doc:name="Variable" />
+			<set-variable variableName="isAdmin" value="#[payload.'isAdmin']"
+				doc:name="Variable" />
+			<choice>
+				<when expression="#[flowVars['isAdmin'] == 1]">
+					<set-variable value="yes" variableName="isadmin" />
+				</when>
+				<otherwise>
+					<set-variable value="no" variableName="isadmin" />
+				</otherwise>
+			</choice>
 
 			<expression-transformer expression="#[trxPayload['id']=flowVars.id;trxPayload]"
 				doc:name="Expression" />
 
 			<expression-transformer
-				expression="#[trxPayload['communityID']=flowVars.communityID;trxPayload]"
+				expression="#[trxPayload['ticketID']=flowVars.ticketID;trxPayload]"
 				doc:name="Expression" />
 
 			<expression-transformer
-				expression="#[trxPayload['communityName']=flowVars.communityName;trxPayload]"
+				expression="#[trxPayload['location']=flowVars.location;trxPayload]"
 				doc:name="Expression" />
 
 			<expression-transformer
-				expression="#[trxPayload['event']=flowVars.event;trxPayload]"
+				expression="#[trxPayload['eventName']=flowVars.eventName;trxPayload]"
 				doc:name="Expression" />
 
 			<expression-transformer
 				expression="#[trxPayload['eventPicture']=flowVars.eventPic;trxPayload]"
+				doc:name="Expression" />
+				
+			<set-variable
+				value="#[org.felo.api.process.Utils.formatDate(flowVars['createdDate'])]"
+				variableName="credDate" doc:name="Variable" />
+				
+			<expression-transformer
+				expression="#[trxPayload['createdDate']=flowVars.credDate;trxPayload]"
+				doc:name="Expression" />
+			
+			<expression-transformer
+				expression="#[trxPayload['isAdmin']=flowVars.isadmin;trxPayload]"
 				doc:name="Expression" />
 
 			<expression-component doc:name="Expression">

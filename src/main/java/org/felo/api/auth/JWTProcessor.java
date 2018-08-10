@@ -28,18 +28,21 @@ public class JWTProcessor {
 			JWTVerifier verifier = JWT.require(Algorithm.HMAC256(secret)).withIssuer("Felo").build();
 			DecodedJWT jwt = verifier.verify(token);
 			logger.info("Verify DecodeJWT = " + jwt.toString());
-			
+
 			return jwt.getId();
 		} catch (Exception e) {
 			e.printStackTrace();
-			
+
 			return "false";
 		}
 	}
 
-	public static String decodeJWTHMAC256(String token) throws Exception {
-		DecodedJWT jwt = JWT.decode(token);
-		return jwt.getId();
+	public static String decodeJWTHMAC256(String token) {
+		try {
+			DecodedJWT jwt = JWT.decode(token);
+			return jwt.getId();
+		} catch (Exception e) {
+			return null;
+		}
 	}
-
 }
