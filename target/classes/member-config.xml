@@ -118,6 +118,22 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 						expression="#[originalPayload['identityPicture']=payload;originalPayload]"
 						doc:name="Expression" />
 				</when>
+				<when expression="#[flowVars.key == 'selfiePicture']">
+					<set-variable
+						value="#[org.apache.commons.lang.StringUtils.substringAfter(payload.getContentType(),'/')]"
+						variableName="fileExtension" doc:name="Variable" />
+					<expression-component doc:name="Expression">
+						<![CDATA[
+						regMap = new java.util.HashMap();
+						regMap['content']= payload.getContent();			
+						regMap['fileName']= '3-' + message.id;
+						regMap['fileExtension']= flowVars.fileExtension;
+						payload = regMap;]]>
+					</expression-component>
+					<expression-transformer
+						expression="#[originalPayload['selfiePicture']=payload;originalPayload]"
+						doc:name="Expression" />
+				</when>
 				<otherwise>
 					<expression-transformer
 						expression="#[originalPayload[flowVars.key]=payload.getContent();originalPayload]"
@@ -125,6 +141,8 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 				</otherwise>
 			</choice>
 		</foreach>
+		<set-variable value="#[message.id]" variableName="correlationID"
+			doc:name="Variable" />
 		<set-payload value="#[originalPayload]" />
 		<custom-transformer class="org.felo.api.data.MessageTransformer"
 			doc:name="Java" />

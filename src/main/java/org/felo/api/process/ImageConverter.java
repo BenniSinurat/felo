@@ -1,45 +1,32 @@
 package org.felo.api.process;
 
+import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
+import java.io.File;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
+import java.util.HashMap;
 
-public class ImageConverter {
-	public static String extractBytes(String ImageName) throws IOException {
-		String base64Image = "";
+import javax.imageio.ImageIO;
 
-		// open image
-		//File imgPath = new File(ImageName);
-		// Reading a Image file from file system
-		// byte imageData[] = new byte[(int) imgPath.length()];
-		// imageInFile.read(imageData);
-		//BufferedImage bufferedImage = ImageIO.read(imgPath);
-		base64Image = Base64.getEncoder().encodeToString(ImageName.getBytes(StandardCharsets.UTF_8));
+import org.mule.api.MuleEventContext;
+import org.mule.api.lifecycle.Callable;
 
-		System.out.println("IMAGE ENCODE: " + base64Image);
+public class ImageConverter implements Callable {
+	public Object onCall(MuleEventContext eventContext) throws IOException {
+		HashMap payload = (HashMap) eventContext.getMessage().getPayload();
 
-		return base64Image;
+		File serverFile = new File((String) payload.get("fileOri"));
+		File blurFile = new File((String) payload.get("fileBlur"));
+
+		BufferedImage originalImage = ImageIO.read(serverFile);
+		int type = originalImage.getType() == 0 ? BufferedImage.TYPE_INT_ARGB : originalImage.getType();
+		System.out.println("ORI: "+serverFile+" BLUR: "+blurFile+" TYPE: "+type);
+		BufferedImage resizedImage = new BufferedImage(500, 500, type);
+		Graphics2D g = resizedImage.createGraphics();
+		g.drawImage(originalImage, 0, 0, 500, 500, null);
+		g.dispose();
+		ImageIO.write(resizedImage, "png", blurFile);
+
+		return null;
 	}
-	
-	public static String decodeBytes(String ImageName) throws IOException {
-		byte []	base64Image = Base64.getDecoder().decode(ImageName);
-		
-		System.out.println("IMAGE DECODE: "+base64Image.toString());
-		
-		return base64Image.toString();
-	}
-
-	
-	/*public static String extractBytes(String ImageName) throws IOException {
-	 // open image 
-	File imgPath = new File(ImageName); 
-	BufferedImage bufferedImage = ImageIO.read(imgPath);
-	 
-	 // get DataBufferBytes from Raster 
-	WritableRaster raster = bufferedImage.getRaster(); 
-	DataBufferByte data = (DataBufferByte) raster.getDataBuffer();
-	  
-	  return (data.getData().toString()); 
-	 }*/
-	 
 }

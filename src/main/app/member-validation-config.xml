@@ -123,7 +123,15 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 				<expression-filter expression="#[originalPayload['token'] != null]" />
 				<expression-filter expression="#[originalPayload['profilePicture'] != null]" />
 				<expression-filter expression="#[originalPayload['identityPicture'] != null]" />
+				<expression-filter expression="#[originalPayload['selfiePicture'] != null]"/>
 				<expression-filter expression="#[originalPayload['idCardNo'] != null]" />
+				<expression-filter expression="#[originalPayload['address'] != null]"/>
+				<expression-filter expression="#[originalPayload['dateOfBirth'] != null]"/>
+				<expression-filter expression="#[originalPayload['placeOfBirth'] != null]"/>
+				<expression-filter expression="#[originalPayload['motherMaidenName'] != null]"/>
+				<expression-filter expression="#[originalPayload['work'] != null]"/>
+				<expression-filter expression="#[originalPayload['sex'] != null]"/>
+				<expression-filter expression="#[originalPayload['nationality'] != null]"/>
 			</and-filter>
 		</message-filter>
 

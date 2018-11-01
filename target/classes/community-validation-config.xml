@@ -386,4 +386,25 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 			</otherwise>
 		</choice>
 	</flow>
+	
+	<flow name="unSubcribeCommunityValidationFlow">
+		<set-payload value="#[flowVars['originalPayload']]" />
+		<message-filter onUnaccepted="invalidParameterFlow"
+			doc:name="Message">
+			<and-filter doc:name="And">
+				<expression-filter expression="#[originalPayload['token'] != null]" />
+				<expression-filter expression="#[originalPayload['communityID'] != null]" />
+			</and-filter>
+		</message-filter>
+
+		<flow-ref name="tokenValidationFlow" />
+		<choice>
+			<when expression="#[payload.status.message == 'SUCCESS']">
+				<flow-ref name="unsubscribeCommunityBPFlow" doc:name="Flow Reference" />
+			</when>
+			<otherwise>
+				<logger level="INFO" message="[MEMBER NOT FOUND = #[payload]]" />
+			</otherwise>
+		</choice>
+	</flow>
 </mule>

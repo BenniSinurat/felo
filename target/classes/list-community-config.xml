@@ -44,15 +44,15 @@ http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/jso
 				doc:name="Variable" />
 			<set-variable variableName="profPic"
 				value="#[payload.'profile_picture']" doc:name="Variable" />
-				
+
 			<db:select config-ref="MySQL_Configuration" doc:name="Database">
 				<db:parameterized-query>
 	            	<![CDATA[SELECT COUNT(*) as members FROM felo.member_community WHERE community_id=#[flowVars['id']]]]>
 				</db:parameterized-query>
 			</db:select>
-			
-			<set-variable variableName="members" value="#[payload.get(0)['members']]"
-				doc:name="Variable" />
+
+			<set-variable variableName="members"
+				value="#[payload.get(0)['members']]" doc:name="Variable" />
 
 			<expression-transformer expression="#[trxPayload['id']=flowVars.id;trxPayload]"
 				doc:name="Expression" />
@@ -60,7 +60,7 @@ http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/jso
 			<expression-transformer
 				expression="#[trxPayload['name']=flowVars.name;trxPayload]"
 				doc:name="Expression" />
-				
+
 			<expression-transformer
 				expression="#[trxPayload['username']=flowVars.username;trxPayload]"
 				doc:name="Expression" />
@@ -68,7 +68,7 @@ http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/jso
 			<expression-transformer
 				expression="#[trxPayload['profilePicture']=flowVars.profPic;trxPayload]"
 				doc:name="Expression" />
-				
+
 			<expression-transformer
 				expression="#[trxPayload['members']=flowVars.members;trxPayload]"
 				doc:name="Expression" />
@@ -122,15 +122,15 @@ http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/jso
 				doc:name="Variable" />
 			<set-variable variableName="profPic"
 				value="#[payload.'profile_picture']" doc:name="Variable" />
-				
+
 			<db:select config-ref="MySQL_Configuration" doc:name="Database">
 				<db:parameterized-query>
 	            	<![CDATA[SELECT COUNT(*) as members FROM felo.member_community WHERE community_id=#[flowVars['id']]]]>
 				</db:parameterized-query>
 			</db:select>
-			
-			<set-variable variableName="members" value="#[payload.get(0)['members']]"
-				doc:name="Variable" />
+
+			<set-variable variableName="members"
+				value="#[payload.get(0)['members']]" doc:name="Variable" />
 
 			<expression-transformer expression="#[trxPayload['id']=flowVars.id;trxPayload]"
 				doc:name="Expression" />
@@ -142,7 +142,7 @@ http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/jso
 			<expression-transformer
 				expression="#[trxPayload['profilePicture']=flowVars.profPic;trxPayload]"
 				doc:name="Expression" />
-				
+
 			<expression-transformer
 				expression="#[trxPayload['members']=flowVars.members;trxPayload]"
 				doc:name="Expression" />
@@ -200,9 +200,9 @@ http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/jso
 	            	<![CDATA[SELECT COUNT(*) as members FROM felo.member_community WHERE community_id=#[flowVars['id']]]]>
 				</db:parameterized-query>
 			</db:select>
-			
-			<set-variable variableName="members" value="#[payload.get(0)['members']]"
-				doc:name="Variable" />
+
+			<set-variable variableName="members"
+				value="#[payload.get(0)['members']]" doc:name="Variable" />
 
 			<expression-transformer expression="#[trxPayload['id']=flowVars.id;trxPayload]"
 				doc:name="Expression" />
@@ -210,7 +210,7 @@ http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/jso
 			<expression-transformer
 				expression="#[trxPayload['name']=flowVars.name;trxPayload]"
 				doc:name="Expression" />
-				
+
 			<expression-transformer
 				expression="#[trxPayload['members']=flowVars.members;trxPayload]"
 				doc:name="Expression" />
@@ -240,11 +240,9 @@ http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/jso
 			doc:name="Set Payload" />
 		<db:select config-ref="MySQL_Configuration" doc:name="Database">
 			<db:parameterized-query>
-            	<![CDATA[SELECT c.id, c.name, c.profile_picture,
-            		(SELECT COUNT(*) FROM felo.member_community WHERE community_id=mc.community_id) as members 
-            			FROM member_community mc 
-            			INNER JOIN members m ON mc.member_id = m.id 
-            			INNER JOIN communities c ON mc.community_id = c.id AND m.msisdn=#[originalPayload.msisdn]
+            	<![CDATA[SELECT c.id, c.name, c.profile_picture 
+            				FROM felo.communities c
+            			WHERE c.recommended='1'
             		LIMIT #[Integer.parseInt(originalPayload['currentPage'])], #[Integer.parseInt(originalPayload['pageSize'])]]]>
 			</db:parameterized-query>
 		</db:select>
@@ -262,11 +260,17 @@ http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/jso
 				doc:name="Variable" />
 			<set-variable variableName="name" value="#[payload.'name']"
 				doc:name="Variable" />
-			<set-variable variableName="members" value="#[payload.'members']"
-				doc:name="Variable" />
 			<set-variable variableName="profPic"
 				value="#[payload.'profile_picture']" doc:name="Variable" />
-				
+			<db:select config-ref="MySQL_Configuration" doc:name="Database">
+				<db:parameterized-query>
+	            	<![CDATA[SELECT id, (SELECT COUNT(*) FROM felo.member_community WHERE community_id=#[flowVars['id']]) as members
+						FROM felo.member_community
+					    	WHERE community_id=#[flowVars['id']]]]>
+				</db:parameterized-query>
+			</db:select>
+			<set-variable variableName="members" value="#[payload.get(0)['members']]"
+				doc:name="Variable" />
 			<expression-transformer expression="#[trxPayload['id']=flowVars.id;trxPayload]"
 				doc:name="Expression" />
 

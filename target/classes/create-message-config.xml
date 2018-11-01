@@ -25,7 +25,6 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 			<![CDATA[responseMap=new java.util.HashMap();
 				responseMap['message']=originalPayload['message'];
 				responseMap['msisdn']=originalPayload['msisdn'];
-				responseMap['communityName']=originalPayload['communityName'];
 				responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('PROCESSED');			
 			payload = responseMap;]]>
 		</expression-component>

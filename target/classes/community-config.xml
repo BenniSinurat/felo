@@ -579,5 +579,38 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 		<exception-strategy ref="sessionException"
 			doc:name="Reference Exception Strategy" />
 	</flow>
+	
+	<flow name="communityUnsubscribeFlow">
+		<http:listener config-ref="HTTP_Listener_Configuration"
+			path="Community/Unsubscribe" allowedMethods="POST" doc:name="HTTP">
+		</http:listener>
+		<message-filter doc:name="Filter favicon">
+			<not-filter>
+				<wildcard-filter pattern="/favicon.ico"
+					caseSensitive="true" />
+			</not-filter>
+		</message-filter>
+
+		<set-variable value="#[message.inboundProperties.'http.method']"
+			variableName="method" doc:name="Variable" />
+		<custom-transformer class="org.felo.api.data.MessageTransformer"
+			doc:name="Java" />
+		<set-variable variableName="originalPayload" value="#[payload]"
+			doc:name="Variable" />
+
+		<set-variable value="#[message.id]" variableName="correlationID"
+			doc:name="Variable" />
+
+		<logger level="INFO"
+			message="[{#[correlationID]} : COMMUNITY-UNSUBSCRIBE Request = #[originalPayload['communityID']] ]"
+			doc:name="Logger" />
+		<flow-ref name="unSubcribeCommunityValidationFlow"
+			doc:name="Flow Reference" />
+
+		<json:object-to-json-transformer
+			doc:name="Object to JSON" />
+		<exception-strategy ref="sessionException"
+			doc:name="Reference Exception Strategy" />
+	</flow>
 
 </mule>

@@ -18,6 +18,8 @@ http://www.springframework.org/schema/tx http://www.springframework.org/schema/t
 	<bean id="CacheProcessor" class="org.felo.api.process.CacheProcessor">
 		<property name="instance" ref="Instance" />
 	</bean>
-	
+
 	<bean id="LoginCredentialHandler" class="org.felo.api.auth.LoginCredentialHandler" />
+
+	<bean id="ImageConverter" class="org.felo.api.process.ImageConverter" />
 </beans>

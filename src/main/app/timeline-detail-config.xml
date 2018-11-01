@@ -13,7 +13,7 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 			doc:name="Set Payload" />
 		<db:select config-ref="MySQL_Configuration" doc:name="Database">
 			<db:parameterized-query>
-            	<![CDATA[SELECT t.id,t.community_id as communityID,c.name as communityName,t.description,t.file, t.created_date,
+            	<![CDATA[SELECT t.id,t.community_id as communityID,c.name as communityName,t.description,t.file, t.created_date, t.file_blur,
             			(SELECT COUNT(*) FROM felo.comments WHERE timeline_id=#[originalPayload['timelineID']]) as comments,
 			            (SELECT COUNT(*) FROM felo.likes WHERE timeline_id=#[originalPayload['timelineID']]) as likes,
 			            (SELECT EXISTS (SELECT 1/0 FROM felo.likes WHERE member_id=(SELECT id FROM felo.members WHERE msisdn=#[originalPayload['msisdn']] AND timeline_id=#[originalPayload['timelineID']]))) as isLike,
@@ -44,10 +44,10 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 		<set-variable variableName="description"
 			value="#[payload.get(0)['description']]" doc:name="Variable" />
 		<set-variable variableName="shareName"
-				value="#[payload.get(0)['shareName']]" doc:name="Variable" />
+			value="#[payload.get(0)['shareName']]" doc:name="Variable" />
+		<!-- <set-variable variableName="profPic" value="#[payload.get(0)['profile_picture']]" 
+			doc:name="Variable" /> -->
 		<set-variable variableName="profPic"
-			value="#[payload.get(0)['profile_picture']]" doc:name="Variable" />
-		<set-variable variableName="shareProfPic"
 			value="#[payload.get(0)['profPicShare']]" doc:name="Variable" />
 		<set-variable variableName="file" value="#[payload.get(0)['file']]"
 			doc:name="Variable" />
@@ -66,6 +66,8 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 			doc:name="Variable" />
 		<set-variable variableName="isAdmin" value="#[payload.get(0)['isAdmin']]"
 			doc:name="Variable" />
+		<set-variable variableName="fileBlur"
+			value="#[payload.get(0)['file_blur']]" doc:name="Variable" />
 		<choice>
 			<when expression="#[flowVars['isAdmin'] == 1]">
 				<set-variable value="yes" variableName="isadmin" />
@@ -101,10 +103,44 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 				<set-variable value="no" variableName="isme" />
 			</otherwise>
 		</choice>
+		
+		<choice>
+			<when expression="#[flowVars['fileBlur'] == null]">
+				<set-variable variableName="fileOri"
+					value="${file.base.path}timeline/#[flowVars['id']]-timeline-1.#[org.apache.commons.lang.StringUtils.substringAfter(flowVars['file'],'.')]"
+					doc:name="Variable" />
+				<set-variable variableName="fileBlur"
+					value="${file.base.path}timeline/#[flowVars['id']]-timeline-2.#[org.apache.commons.lang.StringUtils.substringAfter(flowVars['file'],'.')]"
+					doc:name="Variable" />
+				<expression-component doc:name="Expression">
+					<![CDATA[regMap=new java.util.HashMap();
+						regMap['fileOri']=flowVars['fileOri'];
+						regMap['fileBlur']=flowVars['fileBlur'];
+					payload = regMap;]]>
+				</expression-component>
+				<pooled-component>
+					<spring-object bean="ImageConverter" />
+				</pooled-component>
+				<set-variable
+					value="${url.file}timeline/#[flowVars['id']]-timeline-2.#[org.apache.commons.lang.StringUtils.substringAfter(flowVars['file'],'.')]"
+					variableName="fileBlur" doc:name="Variable" />
+				<db:update config-ref="MySQL_Configuration" doc:name="Database">
+					<db:parameterized-query>
+		            	<![CDATA[UPDATE felo.timelines SET file_blur=#[flowVars['fileBlur']] 
+		            				WHERE id=#[flowVars['id']]]]>
+					</db:parameterized-query>
+				</db:update>
+				<message-filter onUnaccepted="dbFailedFlow" doc:name="Message">
+					<expression-filter expression="#[payload == 1]" />
+				</message-filter>
+			</when>
+			<otherwise>
+				<logger level="INFO" message="BLUR FILE= #[flowVars['fileBlur']]" />
+			</otherwise>
+		</choice>
 
 		<expression-component doc:name="Expression">
-			<![CDATA[
-				responseMap=new java.util.HashMap();
+			<![CDATA[responseMap=new java.util.HashMap();
 				responseMap['msisdn']=originalPayload['msisdn'];
 				responseMap['communityID']=flowVars['communityID'];
 				responseMap['communityName']=flowVars['communityName'];
@@ -116,9 +152,9 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 				responseMap['isLike']=flowVars['islike'];
 				responseMap['isMe']=flowVars['isme'];
 				responseMap['isAdmin']=flowVars['isadmin'];
-				responseMap['file']=flowVars['file'];
+				responseMap['fileOriginal'] = flowVars['file'];
+				responseMap['fileBlur'] = flowVars['fileBlur'];
 				responseMap['profilePicture']=flowVars['profPic'];
-				responseMap['shareProfilePicture']=flowVars['shareProfPic'];
 				responseMap['shareName']=flowVars['shareName'];
 				responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('PROCESSED');			
 			payload = responseMap;]]>

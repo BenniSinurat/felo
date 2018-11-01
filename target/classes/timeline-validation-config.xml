@@ -53,7 +53,11 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 		<set-payload value="#[flowVars['originalPayload']]" />
 		<message-filter onUnaccepted="invalidParameterFlow"
 			doc:name="Message">
-			<expression-filter expression="#[originalPayload['token'] != null]" />
+			<and-filter>
+				<expression-filter expression="#[originalPayload['token'] != null]" />
+				<expression-filter expression="#[originalPayload['currentPage'] != null]"/>
+				<expression-filter expression="#[originalPayload['pageSize'] != null]"/>
+			</and-filter>
 		</message-filter>
 
 		<flow-ref name="tokenValidationFlow" />

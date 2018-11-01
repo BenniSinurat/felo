@@ -12,10 +12,10 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 	<flow name="deleteMessageBPFlow">
 		<set-payload value="#[flowVars['originalPayload']]"
 			doc:name="Set Payload" />
+
 		<db:delete config-ref="MySQL_Configuration" doc:name="Database">
 			<db:parameterized-query>
-            	<![CDATA[DELETE FROM messages WHERE community_id=#[originalPayload['communityID']] AND member_id=(SELECT ms.member_id FROM members m 
-            		INNER JOIN messages ms ON ms.member_id=m.id WHERE m.msisdn=#[originalPayload['msisdn']])]]>
+            	<![CDATA[DELETE FROM messages WHERE message_id=#[originalPayload['messageID']]]]>
 			</db:parameterized-query>
 		</db:delete>
 		<message-filter onUnaccepted="dbFailedFlow" doc:name="Message">

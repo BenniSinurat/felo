@@ -36,7 +36,7 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 			</otherwise>
 		</choice>
 		<set-variable
-			value="/fromMember=#[originalPayload['msisdn']]/file1=#[originalPayload['profilePicture']]/file2=#[originalPayload['identityPicture']]/idCardNo=#[originalPayload['idCardNo']]/token=#[flowVars['tokenAPI']]"
+			value="/fromMember=#[originalPayload['msisdn']]/file1=#[originalPayload['profilePicture']]/file2=#[originalPayload['identityPicture']]/file3=#[originalPayload['selfie']]/idCardNo=#[originalPayload['idCardNo']]/token=#[flowVars['tokenAPI']]"
 			variableName="requestAuthContent" />
 		<expression-transformer
 			expression="#[originalPayload['requestAuthContent']=requestAuthContent;originalPayload]"
@@ -73,14 +73,37 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 		<flow-ref name="responseHandlerFlow" doc:name="Flow Reference" />
 	</flow>
 	<sub-flow name="kycMember">
-		<set-attachment value="#[originalPayload['profilePicture']]"
-			attachmentName="file1" contentType="multipart/form-data" doc:name="Attachment" />
-		<set-attachment value="#[originalPayload['identityPicture']]"
-			attachmentName="file2" contentType="multipart/form-data" doc:name="Attachment" />
+		<set-attachment value="#[originalPayload.profilePicture['content']]"
+			attachmentName="file1" contentType="image/jpeg" doc:name="Attachment" />
+		<set-attachment value="#[originalPayload.identityPicture['content']]"
+			attachmentName="file2" contentType="image/jpeg" doc:name="Attachment" />
+		<set-attachment value="#[originalPayload.selfiePicture['content']]"
+			attachmentName="file3" contentType="image/jpeg" doc:name="Attachment" />
+			
+		<set-attachment value="#[originalPayload['idCardNo']]"
+			attachmentName="idCardNo" contentType="text/plain" doc:name="Attachment" />
+		<set-attachment value="#[originalPayload['address']]"
+			attachmentName="address" contentType="text/plain" doc:name="Attachment" />
+		<set-attachment value="#[originalPayload['dateOfBirth']]"
+			attachmentName="dateOfBirth" contentType="text/plain" doc:name="Attachment" />
+		<set-attachment value="#[originalPayload['placeOfBirth']]"
+			attachmentName="placeOfBirth" contentType="text/plain" doc:name="Attachment" />
+		<set-attachment value="#[originalPayload['motherMaidenName']]"
+			attachmentName="motherMaidenName" contentType="text/plain" doc:name="Attachment" />
+		<set-attachment value="#[originalPayload['msisdn']]"
+			attachmentName="fromMember" contentType="text/plain" doc:name="Attachment" />
+		<set-attachment value="#[flowVars['tokenAPI']]"
+			attachmentName="token" contentType="text/plain" doc:name="Attachment" />
+		<set-attachment value="#[originalPayload['work']]"
+			attachmentName="work" contentType="text/plain" doc:name="Attachment" />
+		<set-attachment value="#[originalPayload['sex']]"
+			attachmentName="sex" contentType="text/plain" doc:name="Attachment" />
+		<set-attachment value="#[originalPayload['nationality']]"
+			attachmentName="nationality" contentType="text/plain" doc:name="Attachment" />
+		<set-payload value="#[null]"/>
 		<http:request config-ref="HTTP_Request_Configuration"
 			path="Member/KYCRequest" method="POST" doc:name="HTTP">
 			<http:request-builder>
-				<http:header headerName="Content-Type" value="multipart/form-data" />
 				<http:header headerName="APIKey" value="${api.key}" />
 				<http:header value="#[originalPayload['requestAuth']]"
 					headerName="requestAuth" />

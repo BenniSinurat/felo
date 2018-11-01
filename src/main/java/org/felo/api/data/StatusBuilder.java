@@ -101,6 +101,12 @@ public abstract class StatusBuilder {
 			return new ResponseStatus("E99", "FAILED", "Failed");
 		case OTP_VALIDATION_FAILED:
 			return new ResponseStatus("T005", "OTP_VALIDATION_FAILED", "OTP Validation Failed");
+		case INVALID_TO_MEMBER:
+			return new ResponseStatus("T006", "INVALID_TO_MEMBER", "Invalid destination account, you can not transfer to your own account");
+		case ACCOUNT_NOT_FOUND:
+			return new ResponseStatus("S14", "ACCOUNT_NOT_FOUND", "Specified account not found");
+		case BANK_NOT_FOUND:
+			return new ResponseStatus("I14", "BANK_NOT_FOUND", "The specified Bank not found");
 		default:
 			return new ResponseStatus("E99", "GENERAL_ERROR", "General Error");
 		}

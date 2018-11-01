@@ -29,10 +29,10 @@ http://www.mulesoft.org/schema/mule/mongo http://www.mulesoft.org/schema/mule/mo
 			class="org.mule.util.store.SimpleMemoryObjectStore" />
 	</spring:beans>
 
-	<jms:activemq-connector name="Active_MQ"
+	<!-- <jms:activemq-connector name="Active_MQ"
 		specification="1.1" brokerURL="failover:tcp://149.129.212.174:61617"
 		disableTemporaryReplyToDestinations="true" validateConnections="true"
-		doc:name="Active MQ" />
+		doc:name="Active MQ" /> -->
 
 	<http:listener-config name="HTTP_Listener_Configuration"
 		host="0.0.0.0" port="${global.port}" basePath="Felo"
@@ -77,11 +77,6 @@ http://www.mulesoft.org/schema/mule/mongo http://www.mulesoft.org/schema/mule/mo
 	<tls:context name="TLS_Context" doc:name="TLS Context">
 		<tls:trust-store type="jks" insecure="true" />
 	</tls:context>
-
-	<mongo:config name="Mongo_DB" host="${mongo.db.host}"
-		port="${mongo.db.port}" username="${mongo.db.username}" password="${mongo.db.password}"
-		connectTimeout="30000" database="${mongo.db.name}" maxWaitTime="80000"
-		doc:name="Mongo DB" />
 
 	<flow name="inputFile">
 		<mulerequester:request

@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<mule xmlns:vm="http://www.mulesoft.org/schema/mule/vm" xmlns:json="http://www.mulesoft.org/schema/mule/json"
-	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core"
-	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+<mule xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:vm="http://www.mulesoft.org/schema/mule/vm"
+	xmlns:json="http://www.mulesoft.org/schema/mule/json" xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
 	xmlns:spring="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd
+	xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd
 http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd
 http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
 http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
@@ -37,92 +38,116 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 		<set-variable
 			value="62#[org.apache.commons.lang.StringUtils.substring(originalPayload['msisdn'],1)]"
 			variableName="newMsisdn" doc:name="Variable" />
-		<set-variable
-			value="/msisdn=#[flowVars['newMsisdn']]/token=#[flowVars['tokenAPI']]"
-			variableName="requestAuthContent" doc:name="Variable" />
-		<expression-transformer
-			expression="#[originalPayload['requestAuthContent']=requestAuthContent;originalPayload]"
-			doc:name="Expression" />
-		<flow-ref name="generateHash" doc:name="Flow Reference" />
-		<flow-ref name="otpRegisterMember" doc:name="Flow Reference" />
-		<choice doc:name="Choice">
-			<when expression="#[flowVars['status'] == 'SESSION_EXPIRED']">
-				<processor-chain doc:name="Processor Chain">
-					<flow-ref name="loginPartnerFlow" doc:name="Flow Reference" />
-					<choice doc:name="Choice">
-						<when expression="#[payload.status.message == 'PROCESSED'">
-							<flow-ref name="otpRegisterMember" doc:name="Flow Reference" />
+
+		<db:select config-ref="MySQL_Configuration" doc:name="Database">
+			<db:parameterized-query>
+				<![CDATA[SELECT id FROM felo.members WHERE msisdn=#[originalPayload['msisdn']]]]>
+			</db:parameterized-query>
+		</db:select>
+		<choice>
+			<when expression="#[payload != []]">
+				<expression-component doc:name="Expression">
+					<![CDATA[responseMap= new java.util.HashMap();
+							responseMap['msisdn']= originalPayload['msisdn'];
+							responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('MEMBER_ALREADY_REGISTERED');			
+					payload = responseMap;]]>
+				</expression-component>
+			</when>
+			<otherwise>
+				<set-variable
+					value="/msisdn=#[flowVars['newMsisdn']]/token=#[flowVars['tokenAPI']]"
+					variableName="requestAuthContent" doc:name="Variable" />
+				<expression-transformer
+					expression="#[originalPayload['requestAuthContent']=requestAuthContent;originalPayload]"
+					doc:name="Expression" />
+				<flow-ref name="generateHash" doc:name="Flow Reference" />
+				<flow-ref name="otpRegisterMember" doc:name="Flow Reference" />
+				<choice doc:name="Choice">
+					<when expression="#[flowVars['status'] == 'SESSION_EXPIRED']">
+						<processor-chain doc:name="Processor Chain">
+							<flow-ref name="loginPartnerFlow" doc:name="Flow Reference" />
 							<choice doc:name="Choice">
-								<when expression="#[flowVars['status'] == 'PROCESSED']">
-									<processor-chain doc:name="Processor Chain">
-										<set-variable value="#[payload.RegisterRequestResponse[0].ticketID]"
-											variableName="ticketID" doc:name="Variable" />
-										<expression-component doc:name="Expression">
-											<![CDATA[regMap = new java.util.HashMap();
-												regMap['methodType']= 'PUT';			
-												regMap['name']= 'RegisterTicketTokenMap';
-												regMap['key']= flowVars['ticketID'];
-												regMap['value']= originalPayload['msisdn'];
+								<when expression="#[payload.status.message == 'PROCESSED'">
+									<flow-ref name="otpRegisterMember" doc:name="Flow Reference" />
+									<choice doc:name="Choice">
+										<when expression="#[flowVars['status'] == 'PROCESSED']">
+											<processor-chain doc:name="Processor Chain">
+												<set-variable
+													value="#[payload.RegisterRequestResponse[0].ticketID]"
+													variableName="ticketID" doc:name="Variable" />
+												<expression-component doc:name="Expression">
+													<![CDATA[regMap = new java.util.HashMap();
+														regMap['methodType']= 'PUT';			
+														regMap['name']= 'RegisterTicketTokenMap';
+														regMap['key']= flowVars['ticketID'];
+														regMap['value']= originalPayload['msisdn'];
+													payload = regMap;]]>
+												</expression-component>
+												<pooled-component>
+													<spring-object bean="CacheProcessor" />
+												</pooled-component>
+												<expression-component doc:name="Expression">
+													<![CDATA[
+														responseMap = new java.util.HashMap();
+														responseMap['msisdn'] = originalPayload['msisdn'];
+														responseMap['ticketID'] = flowVars['ticketID'];
+														responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('PROCESSED');			
+													payload = responseMap;]]>
+												</expression-component>
+												<logger level="INFO"
+													message="[OTP REGISTER MEMBER SUCCESS #[originalPayload['msisdn']] : #[payload]]"
+													doc:name="Logger" />
+											</processor-chain>
+										</when>
+										<when expression="#[flowVars['status'] == 'MEMBER_ALREADY_REGISTERED']">
+											<set-variable
+												value="#[org.felo.api.process.Utils.getRandomNumberInRange(999999)]"
+												variableName="otpnonpad" doc:name="Variable" />
+											<set-variable
+												value="#[org.apache.commons.lang.StringUtils.leftPad(otpnonpad,6,'0')]"
+												variableName="otp" doc:name="Variable" />
+											<set-variable
+												value="#[org.felo.api.process.Utils.GenerateRandomNumber()]"
+												variableName="ticketID" doc:name="Variable" />
+											<logger level="INFO" message="MSISDN = #[originalPayload['msisdn']]"
+												doc:name="Logger" />
+											<expression-component doc:name="Expression">
+												<![CDATA[cacheMap = new java.util.HashMap();
+													cacheMap['otp']= flowVars['otp'];			
+													cacheMap['msisdn']= originalPayload['msisdn'];
+												payload = cacheMap;]]>
+											</expression-component>
+											<vm:outbound-endpoint exchange-pattern="one-way"
+												connector-ref="Notification_VM" path="otp.register.notification"
+												doc:name="VM" />
+											<expression-component doc:name="Expression">
+												<![CDATA[regMap = new java.util.HashMap();
+													regMap['methodType']= 'PUT';			
+													regMap['name']= 'RegisterTicketTokenMap';
+													regMap['key']= flowVars['ticketID']+ ':' + flowVars['otp'];
+													regMap['value']= payload;
 												payload = regMap;]]>
-										</expression-component>
-										<pooled-component>
-											<spring-object bean="CacheProcessor" />
-										</pooled-component>
-										<expression-component doc:name="Expression">
-											<![CDATA[
-												responseMap = new java.util.HashMap();
-												responseMap['msisdn'] = originalPayload['msisdn'];
-												responseMap['ticketID'] = flowVars['ticketID'];
-												responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('PROCESSED');			
-											payload = responseMap;]]>
-										</expression-component>
-										<logger level="INFO"
-											message="[OTP REGISTER MEMBER SUCCESS #[originalPayload['msisdn']] : #[payload]]"
-											doc:name="Logger" />
-									</processor-chain>
-								</when>
-								<when expression="#[flowVars['status'] == 'MEMBER_ALREADY_REGISTERED']">
-									<set-variable
-										value="#[org.felo.api.process.Utils.getRandomNumberInRange(999999)]"
-										variableName="otpnonpad" doc:name="Variable" />
-									<set-variable
-										value="#[org.apache.commons.lang.StringUtils.leftPad(otpnonpad,6,'0')]"
-										variableName="otp" doc:name="Variable" />
-									<set-variable
-										value="#[org.felo.api.process.Utils.GenerateRandomNumber()]"
-										variableName="ticketID" doc:name="Variable" />
-									<logger level="INFO" message="MSISDN = #[originalPayload['msisdn']]"
-										doc:name="Logger" />
-									<expression-component doc:name="Expression">
-										<![CDATA[cacheMap = new java.util.HashMap();
-											cacheMap['otp']= flowVars['otp'];			
-											cacheMap['msisdn']= originalPayload['msisdn'];
-										payload = cacheMap;]]>
-									</expression-component>
-									<vm:outbound-endpoint exchange-pattern="one-way"
-										connector-ref="Notification_VM" path="otp.register.notification"
-										doc:name="VM" />
-									<expression-component doc:name="Expression">
-										<![CDATA[regMap = new java.util.HashMap();
-											regMap['methodType']= 'PUT';			
-											regMap['name']= 'RegisterTicketTokenMap';
-											regMap['key']= flowVars['ticketID']+ ':' + flowVars['otp'];
-											regMap['value']= payload;
-										payload = regMap;]]>
-									</expression-component>
-									<pooled-component>
-										<spring-object bean="CacheProcessor" />
-									</pooled-component>
-									<expression-component doc:name="Expression">
-										<![CDATA[responseMap = new java.util.HashMap();
-											responseMap['msisdn'] = originalPayload['msisdn'];
-											responseMap['ticketID'] = flowVars['ticketID']+ ':' + flowVars['otp'];
-											responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('PROCESSED');			
-										payload = responseMap;]]>
-									</expression-component>
-									<logger level="INFO"
-										message="[OTP REGISTER MEMBER SUCCESS #[originalPayload['msisdn']] : #[payload]]"
-										doc:name="Logger" />
+											</expression-component>
+											<pooled-component>
+												<spring-object bean="CacheProcessor" />
+											</pooled-component>
+											<expression-component doc:name="Expression">
+												<![CDATA[responseMap = new java.util.HashMap();
+													responseMap['msisdn'] = originalPayload['msisdn'];
+													responseMap['ticketID'] = flowVars['ticketID']+ ':' + flowVars['otp'];
+													responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('PROCESSED');			
+												payload = responseMap;]]>
+											</expression-component>
+											<logger level="INFO"
+												message="[OTP REGISTER MEMBER SUCCESS #[originalPayload['msisdn']] : #[payload]]"
+												doc:name="Logger" />
+										</when>
+										<otherwise>
+											<logger level="INFO"
+												message="[LOGIN PARTNER FAILED #[originalPayload['msisdn']] : #[payload]]"
+												doc:name="Logger" />
+										</otherwise>
+									</choice>
 								</when>
 								<otherwise>
 									<logger level="INFO"
@@ -130,91 +155,88 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 										doc:name="Logger" />
 								</otherwise>
 							</choice>
-						</when>
-						<otherwise>
-							<logger level="INFO"
-								message="[LOGIN PARTNER FAILED #[originalPayload['msisdn']] : #[payload]]"
-								doc:name="Logger" />
-						</otherwise>
-					</choice>
-				</processor-chain>
-			</when>
-			<when expression="#[flowVars['status'] == 'MEMBER_ALREADY_REGISTERED']">
-				<set-variable
-					value="#[org.felo.api.process.Utils.getRandomNumberInRange(999999)]"
-					variableName="otpnonpad" doc:name="Variable" />
-				<set-variable
-					value="#[org.apache.commons.lang.StringUtils.leftPad(otpnonpad,6,'0')]"
-					variableName="otp" doc:name="Variable" />
-				<set-variable value="#[org.felo.api.process.Utils.GenerateRandomNumber()]"
-					variableName="ticketID" doc:name="Variable" />
-				<logger level="INFO" message="MSISDN = #[originalPayload['msisdn']]"
-					doc:name="Logger" />
-				<expression-component doc:name="Expression">
-					<![CDATA[cacheMap = new java.util.HashMap();
-						cacheMap['otp']= flowVars['otp'];			
-						cacheMap['msisdn']= originalPayload['msisdn'];
-					payload = cacheMap;]]>
-				</expression-component>
-				<vm:outbound-endpoint exchange-pattern="one-way"
-					connector-ref="Notification_VM" path="otp.register.notification"
-					doc:name="VM" />
-				<expression-component doc:name="Expression">
-					<![CDATA[regMap = new java.util.HashMap();
-						regMap['methodType']= 'PUT';			
-						regMap['name']= 'RegisterTicketTokenMap';
-						regMap['key']= flowVars['ticketID']+ ':' + flowVars['otp'];
-						regMap['value']= payload;
-					payload = regMap;]]>
-				</expression-component>
-				<pooled-component>
-					<spring-object bean="CacheProcessor" />
-				</pooled-component>
-				<expression-component doc:name="Expression">
-					<![CDATA[responseMap = new java.util.HashMap();
-						responseMap['msisdn'] = originalPayload['msisdn'];
-						responseMap['ticketID'] = flowVars['ticketID']+ ':' + flowVars['otp'];
-						responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('PROCESSED');			
-					payload = responseMap;]]>
-				</expression-component>
-				<logger level="INFO"
-					message="[OTP REGISTER MEMBER SUCCESS #[originalPayload['msisdn']] : #[payload]]"
-					doc:name="Logger" />
-			</when>
-			<when expression="#[flowVars['status'] == 'PROCESSED']">
-				<set-variable value="#[payload.RegisterRequestResponse[0].ticketID]"
-					variableName="ticketID" doc:name="Variable" />
+						</processor-chain>
+					</when>
+					<when expression="#[flowVars['status'] == 'MEMBER_ALREADY_REGISTERED']">
+						<set-variable
+							value="#[org.felo.api.process.Utils.getRandomNumberInRange(999999)]"
+							variableName="otpnonpad" doc:name="Variable" />
+						<set-variable
+							value="#[org.apache.commons.lang.StringUtils.leftPad(otpnonpad,6,'0')]"
+							variableName="otp" doc:name="Variable" />
+						<set-variable
+							value="#[org.felo.api.process.Utils.GenerateRandomNumber()]"
+							variableName="ticketID" doc:name="Variable" />
+						<logger level="INFO" message="MSISDN = #[originalPayload['msisdn']]"
+							doc:name="Logger" />
+						<expression-component doc:name="Expression">
+									<![CDATA[cacheMap = new java.util.HashMap();
+										cacheMap['otp']= flowVars['otp'];			
+										cacheMap['msisdn']= originalPayload['msisdn'];
+									payload = cacheMap;]]>
+						</expression-component>
+						<vm:outbound-endpoint exchange-pattern="one-way"
+							connector-ref="Notification_VM" path="otp.register.notification"
+							doc:name="VM" />
+						<expression-component doc:name="Expression">
+									<![CDATA[regMap = new java.util.HashMap();
+										regMap['methodType']= 'PUT';			
+										regMap['name']= 'RegisterTicketTokenMap';
+										regMap['key']= flowVars['ticketID']+ ':' + flowVars['otp'];
+										regMap['value']= payload;
+									payload = regMap;]]>
+						</expression-component>
+						<pooled-component>
+							<spring-object bean="CacheProcessor" />
+						</pooled-component>
+						<expression-component doc:name="Expression">
+									<![CDATA[responseMap = new java.util.HashMap();
+										responseMap['msisdn'] = originalPayload['msisdn'];
+										responseMap['ticketID'] = flowVars['ticketID']+ ':' + flowVars['otp'];
+										responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('PROCESSED');			
+									payload = responseMap;]]>
+						</expression-component>
 
-				<logger level="INFO" message="MSISDN = #[originalPayload['msisdn']]"
-					doc:name="Logger" />
-				<expression-component doc:name="Expression">
-					<![CDATA[regMap = new java.util.HashMap();
-						regMap['methodType']= 'PUT';			
-						regMap['name']= 'RegisterTicketTokenMap';
-						regMap['key']= flowVars['ticketID'];
-						regMap['value']= originalPayload['msisdn'];
-					payload = regMap;]]>
-				</expression-component>
-				<pooled-component>
-					<spring-object bean="CacheProcessor" />
-				</pooled-component>
-				<expression-component doc:name="Expression">
-					<![CDATA[responseMap = new java.util.HashMap();
-						responseMap['msisdn'] = originalPayload['msisdn'];
-						responseMap['ticketID'] = flowVars['ticketID'];
-						responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('PROCESSED');			
-					payload = responseMap;]]>
-				</expression-component>
-				<logger level="INFO"
-					message="[OTP REGISTER MEMBER SUCCESS #[originalPayload['msisdn']] : #[payload]]"
-					doc:name="Logger" />
-			</when>
-			<otherwise>
-				<processor-chain doc:name="Processor Chain">
-					<logger level="INFO"
-						message="[OTP REGISTER MEMBER FAILED #[originalPayload['msisdn']] : #[payload]]"
-						doc:name="Logger" />
-				</processor-chain>
+						<logger level="INFO"
+							message="[OTP REGISTER MEMBER SUCCESS #[originalPayload['msisdn']] : #[payload]]"
+							doc:name="Logger" />
+					</when>
+					<when expression="#[flowVars['status'] == 'PROCESSED']">
+						<set-variable value="#[payload.RegisterRequestResponse[0].ticketID]"
+							variableName="ticketID" doc:name="Variable" />
+
+						<logger level="INFO" message="MSISDN = #[originalPayload['msisdn']]"
+							doc:name="Logger" />
+						<expression-component doc:name="Expression">
+							<![CDATA[regMap = new java.util.HashMap();
+								regMap['methodType']= 'PUT';			
+								regMap['name']= 'RegisterTicketTokenMap';
+								regMap['key']= flowVars['ticketID'];
+								regMap['value']= originalPayload['msisdn'];
+							payload = regMap;]]>
+						</expression-component>
+						<pooled-component>
+							<spring-object bean="CacheProcessor" />
+						</pooled-component>
+						<expression-component doc:name="Expression">
+							<![CDATA[responseMap = new java.util.HashMap();
+								responseMap['msisdn'] = originalPayload['msisdn'];
+								responseMap['ticketID'] = flowVars['ticketID'];
+								responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('PROCESSED');			
+							payload = responseMap;]]>
+						</expression-component>
+						<logger level="INFO"
+							message="[OTP REGISTER MEMBER SUCCESS #[originalPayload['msisdn']] : #[payload]]"
+							doc:name="Logger" />
+					</when>
+					<otherwise>
+						<processor-chain doc:name="Processor Chain">
+							<logger level="INFO"
+								message="[OTP REGISTER MEMBER FAILED #[originalPayload['msisdn']] : #[payload]]"
+								doc:name="Logger" />
+						</processor-chain>
+					</otherwise>
+				</choice>
 			</otherwise>
 		</choice>
 		<flow-ref name="responseHandlerFlow" doc:name="Flow Reference" />

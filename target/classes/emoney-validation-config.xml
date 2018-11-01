@@ -70,7 +70,18 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 		<flow-ref name="tokenValidationFlow" doc:name="Flow Reference" />
 		<choice doc:name="Choice">
 			<when expression="#[payload.status.message == 'SUCCESS']">
-				<flow-ref name="emoneyRequestMemberPaymentBP" doc:name="Flow Reference" />
+				<choice>
+					<when expression="#[originalPayload['msisdn'] == originalPayload['toMember']]">
+						<expression-component doc:name="Expression">
+							<![CDATA[responseMap=new java.util.HashMap();
+								responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('INVALID_TO_MEMBER');			
+							payload = responseMap;]]>
+						</expression-component>
+					</when>
+					<otherwise>
+						<flow-ref name="emoneyRequestMemberPaymentBP" doc:name="Flow Reference" />
+					</otherwise>
+				</choice>
 			</when>
 			<otherwise>
 				<logger level="INFO" message="[MEMBER NOT FOUND = #[payload]]"
@@ -78,7 +89,7 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 			</otherwise>
 		</choice>
 	</flow>
-	
+
 	<flow name="emoneyConfirmMemberPaymentValidation">
 		<message-filter onUnaccepted="invalidParameterFlow"
 			doc:name="Message">
@@ -98,7 +109,7 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 			</otherwise>
 		</choice>
 	</flow>
-	
+
 	<flow name="emoneyRequestPartnerPaymentValidation">
 		<message-filter onUnaccepted="invalidParameterFlow"
 			doc:name="Message">
@@ -120,7 +131,7 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 			</otherwise>
 		</choice>
 	</flow>
-	
+
 	<flow name="emoneyConfirmPartnerPaymentValidation">
 		<message-filter onUnaccepted="invalidParameterFlow"
 			doc:name="Message">
@@ -140,7 +151,7 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 			</otherwise>
 		</choice>
 	</flow>
-	
+
 	<flow name="accountListValidation">
 		<message-filter onUnaccepted="invalidParameterFlow"
 			doc:name="Message">
@@ -157,16 +168,16 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 			</otherwise>
 		</choice>
 	</flow>
-	
+
 	<flow name="creditValidation">
 		<message-filter onUnaccepted="invalidParameterFlow"
 			doc:name="Message">
 			<and-filter>
 				<expression-filter expression="#[originalPayload['token'] != null]" />
-				<expression-filter expression="#[originalPayload['account'] != null]"/>
-				<expression-filter expression="#[originalPayload['toMember'] != null]"/>
-				<expression-filter expression="#[originalPayload['traceNumber'] != null]"/>
-				<expression-filter expression="#[originalPayload['credential'] != null]"/>
+				<expression-filter expression="#[originalPayload['account'] != null]" />
+				<expression-filter expression="#[originalPayload['toMember'] != null]" />
+				<expression-filter expression="#[originalPayload['traceNumber'] != null]" />
+				<expression-filter expression="#[originalPayload['credential'] != null]" />
 				<expression-filter expression="#[originalPayload['amount'] != null]" />
 			</and-filter>
 		</message-filter>
@@ -181,15 +192,15 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 			</otherwise>
 		</choice>
 	</flow>
-	
+
 	<flow name="chargeValidation">
 		<message-filter onUnaccepted="invalidParameterFlow"
 			doc:name="Message">
 			<and-filter>
 				<expression-filter expression="#[originalPayload['token'] != null]" />
-				<expression-filter expression="#[originalPayload['account'] != null]"/>
-				<expression-filter expression="#[originalPayload['traceNumber'] != null]"/>
-				<expression-filter expression="#[originalPayload['credential'] != null]"/>
+				<expression-filter expression="#[originalPayload['account'] != null]" />
+				<expression-filter expression="#[originalPayload['traceNumber'] != null]" />
+				<expression-filter expression="#[originalPayload['credential'] != null]" />
 				<expression-filter expression="#[originalPayload['amount'] != null]" />
 			</and-filter>
 		</message-filter>

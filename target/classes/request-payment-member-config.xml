@@ -105,7 +105,6 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 		</http:request>
 		<json:json-to-object-transformer
 			returnClass="java.lang.Object" doc:name="JSON to Object" />
-		<logger level="INFO" message="RESPONSE: #[payload]" />
 		<set-variable value="#[payload.status.message]"
 			variableName="status" doc:name="Variable" />
 	</sub-flow>

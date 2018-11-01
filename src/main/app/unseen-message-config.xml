@@ -10,41 +10,147 @@ http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/jso
 http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd">
 
 	<flow name="unseenMessageBPFlow">
-		<set-payload value="#[flowVars['originalPayload']]"
-			doc:name="Set Payload" />
 		<db:select config-ref="MySQL_Configuration" doc:name="Database">
 			<db:parameterized-query>
-				<![CDATA[SELECT sum(if(ms.status='0',1,0)) as notif 
-					FROM messages ms 
-					INNER JOIN members m ON ms.member_id=m.id 
-						WHERE ms.community_id=#[originalPayload.communityID] AND ms.status='0' AND m.msisdn=#[originalPayload.msisdn]
-					group by ms.community_id]]>
+            	<![CDATA[SELECT m.id, m.message, m.message_date, m.community_id, m.member_id
+							FROM (
+							    SELECT id, message, message_date, community_id, member_id
+										FROM felo.messages
+							    WHERE status='0' AND community_id IN (SELECT community_id FROM felo.member_community
+												WHERE member_id=(SELECT id FROM felo.members WHERE msisdn=#[originalPayload['msisdn']]))
+							) m
+								ORDER BY m.message_date ASC]]>
 			</db:parameterized-query>
 		</db:select>
-		<logger level="INFO" message="NOTIF = #[payload.get(0)['notif']]"/>
-		<set-variable variableName="notif" value="#[payload.get(0)['notif']]" doc:name="Variable" />
-		<db:select config-ref="MySQL_Configuration" doc:name="Database">
-			<db:parameterized-query>
-            	<![CDATA[SELECT ms.id, m.msisdn, ms.message, ms.message_date 
-            		FROM member_community mc INNER JOIN messages ms ON mc.member_id=ms.member_id 
-            		INNER JOIN members m ON mc.member_id=m.id 
-            			WHERE ms.community_id=#[originalPayload.communityID] 
-            			AND ms.status='0' 
-            			AND (m.msisdn=(SELECT m.msisdn FROM member_community mc 
-            				INNER JOIN messages ms ON mc.member_id=ms.member_id 
-            				INNER JOIN members m ON mc.member_id=m.id 
-            				WHERE mc.community_id=#[originalPayload.communityID] AND mc.admin='1' group by m.msisdn) 
-            				OR m.msisdn=#[originalPayload.msisdn])]]>
-			</db:parameterized-query>
-		</db:select>
+
 		<logger level="INFO" message="PAYLOAD DB = #[payload]"
 			doc:name="Logger" />
+		<message-filter onUnaccepted="dataNotFoundFlow"
+			doc:name="Message">
+			<expression-filter expression="#[payload != []]" />
+		</message-filter>
+
+		<set-variable variableName="trxMaps" value="#[new java.util.ArrayList()]"
+			doc:name="Variable" />
+		<foreach collection="#[payload]" doc:name="For Each">
+			<set-variable variableName="trxPayload" value="#[new java.util.HashMap()]"
+				doc:name="Variable" />
+			<set-variable variableName="id" value="#[new String(payload.'id')]"
+				doc:name="Variable" />
+			<set-variable variableName="message" value="#[payload.'message')]"
+				doc:name="Variable" />
+			<set-variable variableName="messageDate"
+				value="#[org.felo.api.process.Utils.formatDate(payload['message_date'])]"
+				doc:name="Variable" />
+			<set-variable variableName="status" value="#[payload.'status')]"
+				doc:name="Variable" />
+			<set-variable variableName="communityID" value="#[payload.'community_id')]"
+				doc:name="Variable" />
+			<set-variable variableName="memberID" value="#[payload.'member_id')]"
+				doc:name="Variable" />
+
+			<db:select config-ref="MySQL_Configuration" doc:name="Database">
+				<db:parameterized-query>
+            		<![CDATA[SELECT name, profile_picture, (SELECT admin FROM felo.member_community 
+											WHERE community_id=#[flowVars['communityID']] AND member_id=#[flowVars['memberID']]) as isAdmin 
+            				 FROM felo.communities
+		                    WHERE id=#[flowVars['communityID']]]]>
+				</db:parameterized-query>
+			</db:select>
+			<message-filter onUnaccepted="dbFailedFlow" doc:name="Message">
+				<expression-filter expression="#[payload != []]" />
+			</message-filter>
+			<set-variable value="#[payload.get(0)['name']]"
+				variableName="communityName" doc:name="Variable" />
+			<set-variable value="#[payload.get(0)['profile_picture']]"
+				variableName="communityProfPic" doc:name="Variable" />
+			<choice>
+				<when expression="#[payload == []]">
+					<set-variable value="no" variableName="isadmin" />
+				</when>
+				<otherwise>
+					<logger level="INFO" message="IS ADMIN: #[payload.get(0)['isAdmin']]" />
+					<choice>
+						<when expression="#[payload.get(0)['isAdmin'] == 1]">
+							<set-variable value="yes" variableName="isadmin" />
+						</when>
+						<otherwise>
+							<set-variable value="no" variableName="isadmin" />
+						</otherwise>
+					</choice>
+				</otherwise>
+			</choice>
+
+			<db:select config-ref="MySQL_Configuration" doc:name="Database">
+				<db:parameterized-query>
+            		<![CDATA[SELECT msisdn, name, profile_picture from felo.members
+		                    	WHERE id=#[flowVars['memberID']]]]>
+				</db:parameterized-query>
+			</db:select>
+			<message-filter onUnaccepted="dbFailedFlow" doc:name="Message">
+				<expression-filter expression="#[payload != []]" />
+			</message-filter>
+			<set-variable value="#[payload.get(0)['msisdn']]"
+				variableName="msisdn" doc:name="Variable" />
+			<set-variable value="#[payload.get(0)['name']]"
+				variableName="memberName" doc:name="Variable" />
+			<set-variable value="#[payload.get(0)['profile_picture']]"
+				variableName="memberProfPic" doc:name="Variable" />
+			<logger level="INFO"
+				message="MSISDN = #[flowVars['msisdn']] == #[originalPayload['msisdn']]" />
+			<choice>
+				<when expression="#[flowVars['msisdn'] == originalPayload['msisdn']]">
+					<set-variable value="yes" variableName="isMe" />
+				</when>
+				<otherwise>
+					<set-variable value="no" variableName="isMe" />
+				</otherwise>
+			</choice>
+
+			<expression-transformer expression="#[trxPayload['id']=flowVars.id;trxPayload]"
+				doc:name="Expression" />
+			<expression-transformer
+				expression="#[trxPayload['message']=flowVars.message;trxPayload]"
+				doc:name="Expression" />
+			<expression-transformer
+				expression="#[trxPayload['messageDate']=flowVars.messageDate;trxPayload]"
+				doc:name="Expression" />
+			<expression-transformer
+				expression="#[trxPayload['read']=flowVars.status;trxPayload]"
+				doc:name="Expression" />
+			<expression-transformer
+				expression="#[trxPayload['communityID']=flowVars.communityID;trxPayload]"
+				doc:name="Expression" />
+			<expression-transformer
+				expression="#[trxPayload['communityName']=flowVars.communityName;trxPayload]"
+				doc:name="Expression" />
+			<expression-transformer
+				expression="#[trxPayload['communityProfPic']=flowVars.communityProfPic;trxPayload]"
+				doc:name="Expression" />
+			<expression-transformer
+				expression="#[trxPayload['isAdmin']=flowVars.isAdmin;trxPayload]"
+				doc:name="Expression" />
+			<expression-transformer
+				expression="#[trxPayload['memberID']=flowVars.memberID;trxPayload]"
+				doc:name="Expression" />
+			<expression-transformer
+				expression="#[trxPayload['memberName']=flowVars.memberName;trxPayload]"
+				doc:name="Expression" />
+			<expression-transformer
+				expression="#[trxPayload['memberProfPic']=flowVars.memberProfPic;trxPayload]"
+				doc:name="Expression" />
+			<expression-transformer
+				expression="#[trxPayload['isMe']=flowVars.isMe;trxPayload]"
+				doc:name="Expression" />
+			<expression-component doc:name="Expression">
+				<![CDATA[trxMaps.add(trxPayload);]]>
+			</expression-component>
+		</foreach>
 		<expression-component doc:name="Expression">
-			<![CDATA[
-				responseMap=new java.util.HashMap();
+			<![CDATA[responseMap = new java.util.HashMap();
 				responseMap['msisdn']=originalPayload['msisdn'];
-				responseMap['unseenMessage']=flowVars['notif'];
-				responseMap['chattingDetails']=payload;
+				responseMap['totalMessages']=trxMaps.size();
+				responseMap['messageDetails']=trxMaps;
 				responseMap['status']= org.felo.api.data.StatusBuilder.getStatus('PROCESSED');			
 			payload = responseMap;]]>
 		</expression-component>

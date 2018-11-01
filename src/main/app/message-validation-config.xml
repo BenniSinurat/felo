@@ -11,8 +11,7 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 			<and-filter doc:name="And">
 				<expression-filter expression="#[originalPayload['token'] != null]" />
 				<expression-filter expression="#[originalPayload['message'] != null]" />
-				<expression-filter expression="#[originalPayload['communityID'] != null]"/>
-				<expression-filter expression="#[originalPayload['communityName'] != null]"/>
+				<expression-filter expression="#[originalPayload['communityID'] != null]" />
 			</and-filter>
 		</message-filter>
 
@@ -35,10 +34,7 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 			doc:name="Set Payload" />
 		<message-filter onUnaccepted="invalidParameterFlow"
 			doc:name="Message">
-			<and-filter doc:name="And">
-				<expression-filter expression="#[originalPayload['token'] != null]" />
-				<expression-filter expression="#[originalPayload['communityID'] != null]"/>
-			</and-filter>
+			<expression-filter expression="#[originalPayload['token'] != null]" />
 		</message-filter>
 
 		<flow-ref name="tokenValidationFlow" doc:name="Flow Reference" />
@@ -58,7 +54,10 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 			doc:name="Set Payload" />
 		<message-filter onUnaccepted="invalidParameterFlow"
 			doc:name="Message">
-			<expression-filter expression="#[originalPayload['token'] != null]" />
+			<and-filter>
+				<expression-filter expression="#[originalPayload['token'] != null]" />
+				<expression-filter expression="#[originalPayload['messageID'] != null]" />
+			</and-filter>
 		</message-filter>
 
 		<flow-ref name="tokenValidationFlow" doc:name="Flow Reference" />
@@ -72,16 +71,13 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 			</otherwise>
 		</choice>
 	</flow>
-	
+
 	<flow name="unseenMessageValidationFlow">
 		<set-payload value="#[flowVars['originalPayload']]"
 			doc:name="Set Payload" />
 		<message-filter onUnaccepted="invalidParameterFlow"
 			doc:name="Message">
-			<and-filter doc:name="And">
-				<expression-filter expression="#[originalPayload['token'] != null]" />
-				<expression-filter expression="#[originalPayload['communityID'] != null]"/>
-			</and-filter>
+			<expression-filter expression="#[originalPayload['token'] != null]" />
 		</message-filter>
 
 		<flow-ref name="tokenValidationFlow" doc:name="Flow Reference" />
@@ -95,7 +91,7 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 			</otherwise>
 		</choice>
 	</flow>
-	
+
 	<flow name="updateMessageValidationFlow">
 		<set-payload value="#[flowVars['originalPayload']]"
 			doc:name="Set Payload" />
@@ -103,7 +99,7 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 			doc:name="Message">
 			<and-filter doc:name="And">
 				<expression-filter expression="#[originalPayload['token'] != null]" />
-				<expression-filter expression="#[originalPayload['messageID'] != null]"/>
+				<expression-filter expression="#[originalPayload['messageID'] != null]" />
 			</and-filter>
 		</message-filter>
 

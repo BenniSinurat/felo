@@ -46,14 +46,16 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 				</message-filter>
 				<set-variable variableName="id" value="#[payload.get(0)['id']]"
 					doc:name="Variable" />
-				<set-variable value="#[flowVars['id']]-timeline"
+				<set-variable value="#[flowVars['id']]-timeline-1"
 					variableName="timPic" doc:name="Variable" />
+				<set-variable value="#[flowVars['id']]-timeline-2"
+					variableName="timPic2" doc:name="Variable" />
 				<set-variable
 					value="${url.file}timeline/#[flowVars['timPic']].#[originalPayload.file['fileExtension']]"
 					variableName="urlTimPic" doc:name="Variable" />
 				<db:update config-ref="MySQL_Configuration" doc:name="Database">
 					<db:parameterized-query>
-		            	<![CDATA[UPDATE timelines SET file=#[flowVars['urlTimPic']] 
+		            	<![CDATA[UPDATE timelines SET file=#[flowVars['urlTimPic']]
 		            			WHERE id=#[flowVars['id']]]]>
 					</db:parameterized-query>
 				</db:update>
@@ -72,6 +74,7 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 					connector-ref="File_VM" path="save.file" doc:name="VM" />
 			</otherwise>
 		</choice>
+
 		<expression-component doc:name="Expression">
 			<![CDATA[responseMap=new java.util.HashMap();
 				responseMap['msisdn']=originalPayload['msisdn'];
